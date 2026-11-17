@@ -19,11 +19,13 @@ object DecoderRestartPolicy {
     /**
      * True when this restart is evidence against the pinned codec type. [renderedThisSession]
      * being true proves the codec type decodes this stream, so no number of warm-up restarts
-     * after that is reason to flip or to give up.
+     * after that is reason to flip or to give up. [startFailed] - the component threw in start():
+     * no start ever succeeds to pin the type then, yet that is the clearest evidence of all.
      */
     fun countsTowardFailure(
         codecTypePinned: Boolean,
+        startFailed: Boolean,
         renderedSinceLastStart: Boolean,
         renderedThisSession: Boolean
-    ): Boolean = codecTypePinned && !renderedSinceLastStart && !renderedThisSession
+    ): Boolean = (codecTypePinned || startFailed) && !renderedSinceLastStart && !renderedThisSession
 }

@@ -1,5 +1,7 @@
 package io.github.queryparams.overtakelink;
 
+import io.github.queryparams.overtakelink.gap.GapService;
+
 import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
@@ -38,7 +40,7 @@ import io.github.queryparams.overtakelink.link.EventLog;
 /** Интерфейс OvertakeLink по макету: Статус · Настройки · Журнал и мастер первой настройки. */
 public final class OvertakeLinkActivity extends Activity {
     static final int BG = 0xFF0F1216, CARD = 0xFF181C22, LINE = 0xFF262B33, TEXT = 0xFFE8EAED, MUTED = 0xFFA0A8B3,
-            ACCENT = 0xFFFF7A45, OK = 0xFF3DDC97, WARN = 0xFFFFB020, IDLE = 0xFF2E343D;
+            ACCENT = 0xFFFF7A45, OK = 0xFF3DDC97, WARN = 0xFFFFB020, IDLE = 0xFF2E343D, DONATE = 0xFFFF8FB1;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private LinearLayout content;
@@ -48,6 +50,8 @@ public final class OvertakeLinkActivity extends Activity {
     private boolean termsSeen;
     /** Экран, на который вернёт «Назад» из условий, открытых кнопкой в шапке. */
     private String beforeTerms = "status";
+    /** Экран, на который вернёт «Назад» из «Поддержать». */
+    private String beforeDonate = "status";
     private int setupStep;
     private volatile boolean aaServerUp;
     private long logVersion = -1;
@@ -73,6 +77,7 @@ public final class OvertakeLinkActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle state) {
+        UpdateInstaller.cleanup(this);
         super.onCreate(state);
         termsSeen = state != null && state.getBoolean("termsSeen");
         EventLog.init(this);
@@ -96,6 +101,25 @@ public final class OvertakeLinkActivity extends Activity {
         String car = getSharedPreferences("overtakelink", MODE_PRIVATE).getString("carScreen", null);
         title.addView(text(car == null ? getString(R.string.ol_car_never) : getString(R.string.ol_car_screen, car), 12, MUTED, false));
         head.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        // «Поддержать» — только в русском интерфейсе: перевод по СБП работает с российскими картами.
+        if (donateAvailable()) {
+            // Заметно, но не кричит: розовая рамка и лёгкая заливка, как кнопка «Условия» рядом.
+            TextView heart = text("\u2665\uFE0E " + getString(R.string.ol_donate), 13, DONATE, true);
+            GradientDrawable heartBg = round(0x26FF8FB1, 16);
+            heartBg.setStroke(dp(1), DONATE);
+            heart.setBackground(heartBg);
+            heart.setPadding(dp(14), dp(8), dp(14), dp(8));
+            heart.setOnClickListener(v -> {
+                if (!screen.equals("donate")) {
+                    beforeDonate = screen;
+                }
+                show("donate");
+            });
+            LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            hlp.setMargins(0, 0, dp(8), 0);
+            head.addView(heart, hlp);
+        }
         // Условия и отказ от ответственности — всегда под рукой, на любом экране.
         TextView terms = text(getString(R.string.ol_terms_short), 13, TEXT, false);
         GradientDrawable termsBg = round(Color.TRANSPARENT, 16);
@@ -155,12 +179,18 @@ public final class OvertakeLinkActivity extends Activity {
     protected void onResume() {
         super.onResume();
         checkAaServer();
+        // Вывод в GAP Smart Tool выбран и не остановлен руками — служба ждёт его (после перезапуска телефона тоже).
+        if (GapService.selected(this) && !GapService.stoppedByUser(this) && GapService.state() == OvertakeLinkService.State.WAITING) {
+            startForegroundService(new Intent(this, GapService.class).setAction(GapService.ACTION_START));
+        }
         UpdateCheck.maybeCheck(this);
         ui.post(refresh);
+        UpdateInstaller.visible(this, true);
     }
 
     @Override
     protected void onPause() {
+        UpdateInstaller.visible(this, false);
         ui.removeCallbacks(refresh);
         super.onPause();
     }
@@ -182,6 +212,7 @@ public final class OvertakeLinkActivity extends Activity {
         switch (screen) {
             case "setup": renderSetup(); break;
             case "terms": renderTerms(); break;
+            case "donate": renderDonate(); break;
             case "settings": renderSettings(); break;
             case "log": renderLog(); break;
             default: renderStatus();
@@ -202,13 +233,16 @@ public final class OvertakeLinkActivity extends Activity {
             u.addView(get);
             content.addView(u, cardLp());
         }
-        OvertakeLinkService.State st = OvertakeLinkService.state();
+        boolean gap = GapService.selected(this);
+        OvertakeLinkService.State st = gap ? GapService.state() : OvertakeLinkService.state();
         LinearLayout card = card();
-        card.addView(text(OvertakeLinkService.title(this), 19, TEXT, true));
-        card.addView(text(OvertakeLinkService.detail(this), 13, MUTED, false));
-        int done = st == OvertakeLinkService.State.RUNNING ? 4 : st == OvertakeLinkService.State.HANDSHAKE ? 2 : 0;
+        card.addView(text(gap ? GapService.title(this) : OvertakeLinkService.title(this), 19, TEXT, true));
+        card.addView(text(gap ? GapService.detail(this) : OvertakeLinkService.detail(this), 13, MUTED, false));
+        int done = st == OvertakeLinkService.State.RUNNING ? 4 : st == OvertakeLinkService.State.HANDSHAKE
+                ? (gap && !GapService.clientConnected() ? 0 : 2) : 0;
         LinearLayout steps = row();
-        String[] labels = {"USB", getString(R.string.ol_step_hu), "Android Auto", getString(R.string.ol_step_video)};
+        String[] labels = gap ? new String[]{"Wi-Fi", "GAP Smart Tool", "Android Auto", getString(R.string.ol_step_video)}
+                : new String[]{"USB", getString(R.string.ol_step_hu), "Android Auto", getString(R.string.ol_step_video)};
         for (int i = 0; i < labels.length; i++) {
             LinearLayout s = new LinearLayout(this);
             s.setOrientation(LinearLayout.VERTICAL);
@@ -224,7 +258,12 @@ public final class OvertakeLinkActivity extends Activity {
             steps.addView(s, lp);
         }
         card.addView(steps);
-        if (st != OvertakeLinkService.State.WAITING) {
+        if (gap) {
+            card.addView(st != OvertakeLinkService.State.WAITING
+                    ? button(getString(R.string.ol_stop), false, v -> startService(new Intent(this, GapService.class).setAction(GapService.ACTION_STOP)))
+                    : button(getString(R.string.ol_gap_start), true, v -> startForegroundService(new Intent(this, GapService.class)
+                            .setAction(GapService.ACTION_START))));
+        } else if (st != OvertakeLinkService.State.WAITING) {
             card.addView(button(getString(R.string.ol_stop), false, v -> startService(new Intent(this, OvertakeLinkService.class)
                     .setAction(OvertakeLinkService.ACTION_STOP))));
         } else {
@@ -287,6 +326,7 @@ public final class OvertakeLinkActivity extends Activity {
 
     private String screenSignature() {
         StringBuilder sb = new StringBuilder(OvertakeLinkService.state().name()).append('|').append(OvertakeLinkService.detail(this))
+                .append('|').append(GapService.state().name()).append('|').append(GapService.detail(this))
                 .append('|').append(UpdateCheck.availableVersion(this)).append('|');
         for (Check c : checks()) {
             sb.append(c.ok ? '1' : '0');
@@ -321,6 +361,41 @@ public final class OvertakeLinkActivity extends Activity {
             }));
             card.addView(button(getString(R.string.ol_decline), false, v -> finishAndRemoveTask()));
         }
+        content.addView(card, cardLp());
+    }
+
+    // ---------- Поддержать ----------
+
+    private boolean donateAvailable() {
+        return "ru".equals(getResources().getConfiguration().getLocales().get(0).getLanguage());
+    }
+
+    private void renderDonate() {
+        LinearLayout card = card();
+        TextView heart = text("\u2665\uFE0E", 34, DONATE, false);
+        heart.setGravity(Gravity.CENTER);
+        card.addView(heart);
+        TextView title = text(getString(R.string.ol_donate_title), 18, TEXT, true);
+        title.setGravity(Gravity.CENTER);
+        card.addView(title);
+        TextView body = text(getString(R.string.ol_donate_text), 14, 0xFFC3C9D1, false);
+        body.setPadding(0, dp(12), 0, dp(12));
+        card.addView(body);
+        card.addView(button(getString(R.string.ol_donate_sbp), true, v -> {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.ol_donate_url))));
+            } catch (Exception e) {
+                ToastUtils.showToast(this, getString(R.string.ol_donate_open_failed, e.getMessage()), Toast.LENGTH_LONG, true);
+            }
+        }));
+        TextView note = text(getString(R.string.ol_donate_sbp_note), 12, MUTED, false);
+        note.setGravity(Gravity.CENTER);
+        card.addView(note);
+        TextView thanks = text(getString(R.string.ol_donate_thanks), 13, MUTED, false);
+        thanks.setGravity(Gravity.CENTER);
+        thanks.setPadding(0, dp(12), 0, dp(4));
+        card.addView(thanks);
+        card.addView(button(getString(R.string.ol_back), false, v -> show(beforeDonate)));
         content.addView(card, cardLp());
     }
 
@@ -485,6 +560,14 @@ public final class OvertakeLinkActivity extends Activity {
         aa.addView(button(getString(R.string.ol_open_aa), false, v -> openAndroidAuto()));
         content.addView(aa, cardLp());
 
+        LinearLayout output = card();
+        output.addView(text(getString(R.string.ol_output_title), 16, TEXT, true));
+        boolean gap = GapService.selected(this);
+        output.addView(text(getString(gap ? R.string.ol_output_gap_note : R.string.ol_output_usb_note), 13, MUTED, false));
+        output.addView(button(getString(R.string.ol_output_usb), !gap, v -> setOutput(GapService.OUTPUT_USB)));
+        output.addView(button(getString(R.string.ol_output_gap), gap, v -> setOutput(GapService.OUTPUT_GAP)));
+        content.addView(output, cardLp());
+
         LinearLayout video = card();
         video.addView(text(getString(R.string.ol_video_title), 16, TEXT, true));
         String mode = getSharedPreferences("overtakelink", MODE_PRIVATE).getString(OvertakeLinkService.PREF_VIDEO_MODE, OvertakeLinkService.VIDEO_DEFAULT);
@@ -500,6 +583,12 @@ public final class OvertakeLinkActivity extends Activity {
         video.addView(text(getString(R.string.ol_video_hint), 12, MUTED, false));
         content.addView(video, cardLp());
 
+        // Микрофон машины — только по кабелю; при выводе в GAP Smart Tool микрофон ГУ слушает его голосовое управление.
+        if (gap) {
+            // Включили до обновления, когда GAP уже был выбран: выключаем и здесь, а не только при выборе вывода.
+            carMicOffForGap();
+            return;
+        }
         LinearLayout lab = card();
         lab.addView(text(getString(R.string.ol_experiments), 16, TEXT, true));
         lab.addView(text(getString(R.string.ol_car_mic_note), 13, MUTED, false));
@@ -511,6 +600,31 @@ public final class OvertakeLinkActivity extends Activity {
         }));
         content.addView(lab, cardLp());
 
+    }
+
+    /** Вывод выбирается только вручную: в GAP Smart Tool — служба ждёт его по Wi-Fi; по кабелю — служба GAP останавливается. */
+    private void setOutput(String output) {
+        getSharedPreferences("overtakelink", MODE_PRIVATE).edit().putString(GapService.PREF_OUTPUT, output).apply();
+        EventLog.add("Вывод Android Auto: " + (GapService.OUTPUT_GAP.equals(output) ? "в GAP Smart Tool по Wi-Fi" : "по кабелю (QDLink)"));
+        if (GapService.OUTPUT_GAP.equals(output)) {
+            carMicOffForGap();
+            // Экран и приёмник AA — у одного режима за раз. Останавливаем без оглядки на состояние: кабельное
+            // подключение могло ещё открывать аксессуар (состояние пока WAITING) и запустилось бы уже при GAP.
+            startService(new Intent(this, OvertakeLinkService.class).setAction(OvertakeLinkService.ACTION_STOP));
+            startForegroundService(new Intent(this, GapService.class).setAction(GapService.ACTION_START));
+        } else {
+            // Так же без оглядки: служба GAP могла только что запуститься и ещё не объявить состояние.
+            startService(new Intent(this, GapService.class).setAction(GapService.ACTION_STOP));
+        }
+        render();
+    }
+
+    /** Микрофон ГУ нужен голосовому управлению GAP Smart Tool: тест микрофона машины выключаем, а не прячем включённым. */
+    private void carMicOffForGap() {
+        if (getSharedPreferences("overtakelink", MODE_PRIVATE).getBoolean(OvertakeLinkService.PREF_CAR_MIC, false)) {
+            getSharedPreferences("overtakelink", MODE_PRIVATE).edit().putBoolean(OvertakeLinkService.PREF_CAR_MIC, false).apply();
+            EventLog.add("Микрофон машины (тест): выключен — выбран вывод в GAP Smart Tool");
+        }
     }
 
     private void setVideoMode(String mode) {
@@ -530,14 +644,22 @@ public final class OvertakeLinkActivity extends Activity {
         logVersion = EventLog.version();
         card.addView(logView);
         LinearLayout r = row();
-        r.addView(button(getString(R.string.ol_save_log), false, v -> {
+        r.addView(button(getString(R.string.ol_save_log), false, v -> new Thread(() -> {
+            // Чтение и запись всего журнала — не на главном потоке; результат — плашкой.
+            String msg;
             try {
-                ToastUtils.showToast(this, getString(R.string.ol_saved, EventLog.export(this)), Toast.LENGTH_LONG, true);
+                msg = getString(R.string.ol_saved, EventLog.export(this));
             } catch (Exception e) {
-                ToastUtils.showToast(this, getString(R.string.ol_save_failed, e.getMessage()), Toast.LENGTH_LONG, true);
+                msg = getString(R.string.ol_save_failed, e.getMessage());
             }
-        }), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        r.addView(button(getString(R.string.ol_clear), false, v -> { EventLog.wipeFile(); render(); }),
+            String m = msg;
+            ui.post(() -> ToastUtils.showToast(this, m, Toast.LENGTH_LONG, true));
+        }, "ol-log-save").start()), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        r.addView(button(getString(R.string.ol_clear), false, v -> new Thread(() -> {
+            // Очистка ждёт идущую выгрузку журнала — не на главном потоке.
+            EventLog.wipeFile();
+            ui.post(this::render);
+        }, "ol-log-wipe").start()),
                 new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         card.addView(r);
         content.addView(card, cardLp());

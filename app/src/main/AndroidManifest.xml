@@ -514,5 +514,9 @@
             android:name="io.github.queryparams.overtakelink.OvertakeLinkService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice|microphone" />
+        <service
+            android:name="io.github.queryparams.overtakelink.gap.GapService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice|microphone" />
     </application>
 </manifest>

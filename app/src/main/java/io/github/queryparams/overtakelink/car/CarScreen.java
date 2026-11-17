@@ -27,6 +27,9 @@ public final class CarScreen {
         void onCodecConfig(byte[] spsPps);
 
         void onFrame(byte[] data, int off, int len, boolean keyFrame);
+
+        /** Кодировщик отказал посреди показа (поток кодировщика). */
+        void onEncoderFailed(String why);
     }
 
     private static final String DISPLAY_NAME = "OvertakeLink";
@@ -94,7 +97,6 @@ public final class CarScreen {
         DisplayManager dm = context.getSystemService(DisplayManager.class);
         display = dm.createVirtualDisplay(DISPLAY_NAME, width, height, dpi, null,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY | DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION);
-        current = this;
     }
 
     public void start(Context context, Packets.Video v) throws Exception {
@@ -107,7 +109,6 @@ public final class CarScreen {
         running = true;
         drainThread = new Thread(this::drainLoop, "ol-encoder");
         drainThread.start();
-        current = this;
         EventLog.add("Экран машины: виртуальный дисплей #" + displayId() + " " + width + "x" + height + " @" + dpi + " dpi, кодировщик «"
                 + codec.getName() + "», " + v.frameRate + " к/с, " + v.bitRate + " бит/с, ключевой кадр раз в " + v.frameInterval + " с");
     }
@@ -150,6 +151,20 @@ public final class CarScreen {
         throw last;
     }
 
+    /** Битрейт кодировщика на ходу (бит/с) — как просит ГУ; кодировщик не пересоздаётся. */
+    public void setBitrate(int bitsPerSecond) {
+        MediaCodec c = codec;
+        if (c == null) {
+            return;
+        }
+        Bundle b = new Bundle();
+        b.putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, bitsPerSecond);
+        try {
+            c.setParameters(b);
+        } catch (IllegalStateException ignored) {
+        }
+    }
+
     public void requestKeyFrame() {
         resendConfig = true;
         MediaCodec c = codec;
@@ -161,6 +176,14 @@ public final class CarScreen {
             } catch (IllegalStateException ignored) {
             }
         }
+    }
+
+    /**
+     * Сделать экран текущим — только владелец сеанса и под своей блокировкой, после проверки, что сеанс ещё жив:
+     * запуск устаревшего сеанса не должен подменить экран нового.
+     */
+    public void publish() {
+        current = this;
     }
 
     public void stop() {
@@ -203,6 +226,7 @@ public final class CarScreen {
             } catch (Exception e) {
                 if (running) {
                     EventLog.error("кодировщик экрана машины", e);
+                    sink.onEncoderFailed(String.valueOf(e.getMessage()));
                 }
                 return;
             }
@@ -239,6 +263,7 @@ public final class CarScreen {
             } catch (Exception e) {
                 if (running) {
                     EventLog.error("выдача кадра экрана машины", e);
+                    sink.onEncoderFailed(String.valueOf(e.getMessage()));
                 }
                 return;
             }

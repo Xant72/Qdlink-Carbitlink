@@ -70,22 +70,36 @@ public final class UpdateCheck {
         start(context, result);
     }
 
+    /** Кто ждёт результата идущей проверки (кнопка, нажатая во время автоматической, — тоже). */
+    private static final java.util.List<Result> waiting = new java.util.ArrayList<>();
+
     private static void start(Context context, Result result) {
-        if (checking) {
-            return;
+        synchronized (waiting) {
+            if (result != null) {
+                waiting.add(result);
+            }
+            if (checking) {
+                return;
+            }
+            checking = true;
         }
-        checking = true;
         Context app = context.getApplicationContext();
         Handler main = new Handler(Looper.getMainLooper());
         new Thread(() -> {
-            boolean ok;
+            boolean ok = false;
             try {
                 ok = check(app);
             } finally {
-                checking = false;
-            }
-            if (result != null) {
-                main.post(() -> result.done(ok));
+                java.util.List<Result> done;
+                synchronized (waiting) {
+                    checking = false;
+                    done = new java.util.ArrayList<>(waiting);
+                    waiting.clear();
+                }
+                boolean result1 = ok;
+                for (Result r : done) {
+                    main.post(() -> r.done(result1));
+                }
             }
         }, "ol-update").start();
     }

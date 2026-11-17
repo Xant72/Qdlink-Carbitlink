@@ -90,7 +90,8 @@ class GpsLocation constructor(private val context: Context): LocationListener {
                 LocationManager.GPS_PROVIDER, UPDATE_INTERVAL_MS, 0f, this
             )
             val location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-            AppLog.i("Last known location:  ${location?.toString() ?: "Unknown"}")
+            // OvertakeLink: координаты в журнал не пишем — он уходит в «Загрузки» и в обращения.
+            AppLog.i("Last known location: ${if (location != null) "present" else "Unknown"}")
             requested = true
             subscribedAtMs = SystemClock.elapsedRealtime()
             handler.postDelayed(periodicResend, RESEND_INTERVAL_MS)

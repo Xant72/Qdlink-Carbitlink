@@ -11,7 +11,7 @@ class DecoderRestartPolicyTest {
         // The one case the ladder exists for: a component that cannot decode this type at all.
         assertTrue(
             DecoderRestartPolicy.countsTowardFailure(
-                codecTypePinned = true, renderedSinceLastStart = false, renderedThisSession = false
+                codecTypePinned = true, startFailed = false, renderedSinceLastStart = false, renderedThisSession = false
             )
         )
     }
@@ -22,7 +22,7 @@ class DecoderRestartPolicyTest {
         // has decoded this stream - warm-up churn is not evidence the codec is broken.
         assertFalse(
             DecoderRestartPolicy.countsTowardFailure(
-                codecTypePinned = true, renderedSinceLastStart = false, renderedThisSession = true
+                codecTypePinned = true, startFailed = false, renderedSinceLastStart = false, renderedThisSession = true
             )
         )
     }
@@ -31,7 +31,7 @@ class DecoderRestartPolicyTest {
     fun `a restart after a frame from the current start never counts`() {
         assertFalse(
             DecoderRestartPolicy.countsTowardFailure(
-                codecTypePinned = true, renderedSinceLastStart = true, renderedThisSession = true
+                codecTypePinned = true, startFailed = false, renderedSinceLastStart = true, renderedThisSession = true
             )
         )
     }
@@ -41,7 +41,19 @@ class DecoderRestartPolicyTest {
         // Before the first successful start there is no codec type to hold anything against.
         assertFalse(
             DecoderRestartPolicy.countsTowardFailure(
-                codecTypePinned = false, renderedSinceLastStart = false, renderedThisSession = false
+                codecTypePinned = false, startFailed = false, renderedSinceLastStart = false, renderedThisSession = false
+            )
+        )
+    }
+
+    @Test
+    fun `a component that never starts counts even before the first pin`() {
+        // Measured on a Xiaomi in transcode mode: the hardware decoder throws in start() every time,
+        // so no start ever succeeds to pin the type - these failures still have to escalate, or the
+        // software fallback and the type flip are never reached.
+        assertTrue(
+            DecoderRestartPolicy.countsTowardFailure(
+                codecTypePinned = false, startFailed = true, renderedSinceLastStart = false, renderedThisSession = false
             )
         )
     }

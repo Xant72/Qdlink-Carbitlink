@@ -24,8 +24,7 @@ maps, music, calls, the Assistant — with touch control.
 
 ## Installation
 
-1. **Download** the latest version from [Releases](../../releases): the `OvertakeLink-x.y.z.apk` file
-   (while the project is in beta, versions are marked as pre-release — that’s expected).
+1. **Download** the latest version from [Releases](../../releases): the `OvertakeLink-x.y.z.apk` file.
    Open it on the phone. Android will ask to allow installs from this source — allow it and tap
    “Install”.
 2. Install **Android Auto** from Google Play if you don’t have it yet.
@@ -36,9 +35,10 @@ maps, music, calls, the Assistant — with touch control.
      10 times (developer mode opens), then ⋮ → “Start head unit server”. After a phone restart this
      has to be repeated — OvertakeLink will remind you on the car screen and with a notification
      on the phone (tapping it opens Android Auto);
+   - cable and default app — as in step 4 below;
    - Bluetooth: the phone must be connected to the car, as for music.
 4. **Connect the phone to the car’s USB port with a cable.** Android will ask which app should open
-   “QDriveLink” — choose OvertakeLink and tick “Always”. It’s best to uninstall the stock QDLink app.
+   “QDriveLink” (on some cars “AndroidLink”) — choose OvertakeLink and tick “Always”. It’s best to uninstall the stock QDLink app.
 5. The first time, Android Auto will ask you on the phone to accept its terms and allow
    notification access — do it while parked.
 
@@ -46,18 +46,18 @@ After that everything works by itself: get in, plug in the cable — Android Aut
 
 **Steering wheel buttons.** The car sends “next / previous” to whichever audio source is selected
 on the head unit: they switch tracks only while the head unit’s stock Bluetooth player is open. The
-steering wheel voice button is not supported yet — call the Assistant with “Hey Google” or the
-microphone icon on the car screen.
+steering wheel voice button works only if the car passes it to the phone over Bluetooth; if not, call the
+Assistant with “Hey Google” or the microphone icon on the car screen.
 
-**Updates:** OvertakeLink checks for new versions by itself and shows a “Download and install”
+**Updates:** when opened, OvertakeLink checks GitHub for new versions (including pre-releases) and shows a “Download and install”
 button on the main screen: the app downloads the new version and opens the installer. The first
 time, Android will ask you to allow OvertakeLink to install apps. The new version installs over
 the old one, settings are kept.
 
 **Interface language** — English or Russian, following the phone language.
 
-**If something goes wrong:** OvertakeLink → “Log” → “Save log” (the log is also saved automatically
-after every drive to `Downloads/OvertakeLink`). Attach it to your problem report. The log itself is
+**If something goes wrong:** OvertakeLink → “Log” → “Save log” (with the cable connection the log is also
+saved automatically after every drive to `Downloads/OvertakeLink`; with GAP Smart Tool, only with this button). Attach it to your problem report. The log itself is
 in Russian — that’s fine.
 
 **Questions, bugs, wishes** — in [Issues](../../issues). Describe the car (model, year, head unit
@@ -77,8 +77,8 @@ from the file (more in [Privacy](PRIVACY.md)).
   - **direct** — the phone just forwards Android Auto’s ready video: almost no load from
     OvertakeLink, lower latency, sharper picture. Try it — if the car screen stays black, switch
     back to compatible.
-- Bluetooth — for sound and steering wheel buttons. Internet is only needed by maps and Android
-  Auto’s online services.
+- Bluetooth — for sound and steering wheel buttons. Internet is needed by maps and Android
+  Auto’s online services, and to check for and download OvertakeLink updates.
 - A USB cable that carries data (not charge-only). The phone charges from the car’s USB, but
   during navigation with the screen on the battery may slowly drain.
 
@@ -95,13 +95,17 @@ from the file (more in [Privacy](PRIVACY.md)).
   then “Direct 480p”; if that doesn’t help, choose “Compatible”. On the Geely Atlas Pro 2023 direct
   480p shows a picture; 720p and 1080p were reworked in 0.9.1 and are still being tested; compatible
   works.
+- If the picture now and then drops to a black screen or tears, lower the quality (1080p → 720p → 480p): the head
+  unit may not keep up with drawing heavy frames. Quality is set with “Video to the car screen” and only
+  for the cable connection: the new one takes effect once you unplug the cable and plug it back in. With output to
+  GAP Smart Tool over Wi-Fi the quality is always 1080p and this setting does not affect it.
 
 **Tested:** Xiaomi 14 Ultra (Android 15, HyperOS) + Geely Atlas Pro 2023; Android 15 emulator with a
 head unit simulator. Other combinations — please report how it went.
 
 ## Terms of use
 
-On first launch OvertakeLink shows these terms and works only after they are accepted.
+OvertakeLink shows these terms each time you open it; it connects to the car only after they have been accepted.
 
 1. OvertakeLink is free, open-source software (GNU AGPL-3.0 license). You may use, study, modify and distribute it under the terms of that license.
 
@@ -125,7 +129,7 @@ Android Auto (on the phone) ──AAP over localhost──► OvertakeLink ─�
 
 1. The head unit connects to the phone over USB as a QDLink accessory (`Neusoft / QDriveLink`);
    Android opens OvertakeLink.
-2. OvertakeLink speaks the QDLink protocol (`!BIN` format, 512-byte packets; newer head units — `5A5A` + JSON) — the head unit
+2. OvertakeLink speaks the QDLink protocol (`!BIN` format, packets padded to 512-byte blocks; newer head units — `5A5A` + JSON) — the head unit
    thinks it is talking to the stock app.
 3. The built-in Android Auto receiver (from [Open Headunit](https://github.com/andreknieriem/headunit-revived))
    connects to Android Auto on the same phone through its “head unit server”.
@@ -138,9 +142,20 @@ Video modes:
   screen, so AA draws it with compensation for stretched pixels — proportions on screen are right.
   The bigger the frame, the sharper the picture.
 - **Compatible** — AA draws 1080p with the interface in the car screen strip; the phone decodes the
-  video and re-encodes that strip pixel for pixel for the car screen (6 Mbit/s). Slightly more
+  video and re-encodes that strip pixel for pixel for the car screen at the bitrate the head unit requests (at least 2 Mbit/s). Slightly more
   latency, but the stream is the same as the stock QDLink one and independent of the head unit
   decoder’s capabilities.
+
+### Output to GAP Smart Tool over Wi-Fi
+
+Instead of QDLink, the picture can go to [GAP Smart Tool](https://github.com/queryParams/gap-smart-tool) on the head
+unit (Settings → “Where to show Android Auto” → “In GAP Smart Tool over Wi-Fi”; chosen by hand, the cable is then only
+for charging). The phone shares its hotspot, the head unit joins it, and GAP Smart Tool connects to its network gateway —
+the phone — on TCP port 47621. OvertakeLink starts Android Auto in direct 1080p mode for the screen area GAP Smart Tool
+reports (1724×640 on the Atlas Pro): AA draws its interface in that shape with margins around it, H.264 goes over as is,
+touches come back. The “Video to the car screen” setting does not apply here. After a phone restart, open OvertakeLink
+once; after “Stop”, tap “Turn on”.
+Protocol: `gap/GapProtocol.java` (a copy lives in GAP Smart Tool).
 
 ## Building
 
@@ -152,8 +167,8 @@ You need JDK 17+ and the Android SDK. `build.sh` looks for them in `~/.local/opt
 ./build.sh testPlaystoreDebugUnitTest   # unit tests
 ```
 
-Releases are built from the `playstore` flavor: Open Headunit’s `github` flavor contains an
-“offline VPN” that would cut Android Auto off from the internet on the phone.
+Releases are built from the `playstore` flavor, which leaves out the “offline VPN” of Open Headunit’s `github`
+flavor.
 
 A debug build (and a release built with `-PolSim`) can connect to a head unit simulator over TCP
 instead of USB: `UsbAttachActivity` with the extra `sim=host:port`. This way the whole path — from
@@ -164,7 +179,7 @@ a car.
 
 - The Android Auto head unit server is a developer mode; Google may change its behavior in new
   AA versions.
-- The steering wheel voice button is not supported; “next / previous” work only while the head
+- The steering wheel voice button works only if the car passes it to the phone over Bluetooth; “next / previous” work only while the head
   unit’s Bluetooth player is selected. Buttons the car doesn’t pass over Bluetooth are not available
   to the phone.
 - Wireless connection (QDLink over Wi‑Fi) is not implemented yet.

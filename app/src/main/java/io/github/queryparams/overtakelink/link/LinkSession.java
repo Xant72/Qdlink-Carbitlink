@@ -80,7 +80,7 @@ public final class LinkSession {
     }
 
     /**
-     * Раз в 3 с. Пока ГУ молчит — AppStatus (ГУ начинает слушать через ~30 с и отвечает на первый пакет после этого).
+     * Раз в 3 с. Пока ГУ молчит — AppStatus (в норме ГУ отвечает на первый за ~10 мс).
      * В протоколе 5A5A родной QDLink всё время шлёт HEARTBEAT раз в 3 с.
      */
     public synchronized void tick() {
@@ -91,7 +91,7 @@ public final class LinkSession {
         if (proto == Proto.UNKNOWN) {
             appStatusSent++;
             if (appStatusSent == 1 || appStatusSent % 5 == 0) {
-                EventLog.add("→ ГУ: AppStatus (!BIN, cmd 1), попытка " + appStatusSent + ". ГУ обычно отвечает через ~30 с");
+                EventLog.add("→ ГУ: AppStatus (!BIN, cmd 1), попытка " + appStatusSent);
             }
             host.send(OldPackets.appStatus(host.sdk()));
         }

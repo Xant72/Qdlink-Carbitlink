@@ -16,7 +16,7 @@
     <string name="ol_update_check">Check for updates</string>
     <string name="ol_update_checking">Checking…</string>
     <string name="ol_update_latest">You have the latest version (%1$s)</string>
-    <string name="ol_update_check_failed">Couldn’t reach GitHub — check the internet and try again</string>
+    <string name="ol_update_check_failed">Couldn’t check for updates — check the internet and try again later</string>
 
     <string name="ol_state_running">Android Auto on the car screen</string>
     <string name="ol_state_handshake">Connecting to the car</string>
@@ -38,9 +38,9 @@
     <string name="ol_check_aa_server">Android Auto server</string>
     <string name="ol_check_aa_server_ok">running</string>
     <string name="ol_check_aa_server_bad">turn on</string>
-    <string name="ol_check_usb">OvertakeLink opens on cable</string>
+    <string name="ol_check_usb">OvertakeLink has opened on cable</string>
     <string name="ol_check_usb_bad">checked in the car</string>
-    <string name="ol_check_bt">Bluetooth audio</string>
+    <string name="ol_check_bt">Bluetooth audio (any device)</string>
     <string name="ol_check_bt_ok">connected</string>
     <string name="ol_check_bt_bad">not connected</string>
 
@@ -63,10 +63,10 @@
     <string name="ol_setup_2_text">Android Auto → tap the version number 10 times → ⋮ → “Start head unit server”.\nAfter a phone restart you may need to repeat this — OvertakeLink will remind you.</string>
     <string name="ol_setup_2_action">Open Android Auto</string>
     <string name="ol_setup_3_title">Cable and default app</string>
-    <string name="ol_setup_3_text">Connect the phone to the car’s USB port with a cable.\nAndroid will ask which app should open “QDriveLink” — choose OvertakeLink and tick “Always”.\nThe first time, Android Auto will ask you on the phone to accept its terms and allow notification access — do it while parked.\nIt’s best to uninstall the stock QDLink app.</string>
+    <string name="ol_setup_3_text">Connect the phone to the car’s USB port with a cable.\nAndroid will ask which app should open “QDriveLink” (on some cars “AndroidLink”) — choose OvertakeLink and tick “Always”.\nThe first time, Android Auto will ask you on the phone to accept its terms and allow notification access — do it while parked.\nIt’s best to uninstall the stock QDLink app.</string>
     <string name="ol_setup_3_action">Got it</string>
     <string name="ol_setup_4_title">Bluetooth: audio and steering wheel buttons</string>
-    <string name="ol_setup_4_text">Android Auto sound goes to the car over Bluetooth, just like your music does now. Make sure the phone is connected to the car.\nSteering wheel “next / previous” switch tracks while the head unit’s Bluetooth player is open. The voice button on the steering wheel is not supported yet — call the Assistant with “Hey Google” or the microphone icon on the car screen.</string>
+    <string name="ol_setup_4_text">Android Auto sound goes to the car over Bluetooth, just like your music does now. Make sure the phone is connected to the car.\nSteering wheel “next / previous” switch tracks while the head unit’s Bluetooth player is open. The voice button on the steering wheel works only if the car passes it to the phone over Bluetooth; if not, call the Assistant with “Hey Google” or the microphone icon on the car screen.</string>
     <string name="ol_setup_4_action">Open Bluetooth</string>
     <string name="ol_done">Done</string>
     <string name="ol_next">Next</string>
@@ -76,17 +76,17 @@
     <string name="ol_launch_risk">Use at your own risk: the app is provided “as is”, without warranty. Keep your eyes on the road — set everything up while parked.</string>
     <string name="ol_launch_auto">OvertakeLink starts by itself when the car is connected with a cable and Android has asked which app to open it with.</string>
     <string name="ol_setup_again">Run first-time setup again</string>
-    <string name="ol_aa_note">Interface size, codec, audio and more are in the advanced settings of the built-in Android Auto receiver.</string>
+    <string name="ol_aa_note">Audio, microphone and other options are in the advanced settings of the built-in Android Auto receiver. Resolution, interface size, codec and frame rate are set by OvertakeLink for the chosen video mode; changing them there has no effect.</string>
     <string name="ol_aa_advanced">Advanced Android Auto settings</string>
     <string name="ol_open_aa">Open Android Auto</string>
     <string name="ol_video_title">Video to the car screen</string>
-    <string name="ol_video_transcode_note">Compatible: the phone re-encodes the picture for the car screen. Slower, but works with any head unit.</string>
+    <string name="ol_video_transcode_note">Compatible: the phone re-encodes the picture for the car screen. Slower, but doesn’t depend on the head unit’s decoder.</string>
     <string name="ol_video_direct_note">Direct: the Android Auto picture goes to the car without re-encoding — lower latency, sharper, and the phone runs cooler.</string>
     <string name="ol_video_direct">Direct 1080p (sharpest)</string>
     <string name="ol_video_direct_light">Direct 720p</string>
-    <string name="ol_video_direct_small">Direct 480p (smaller picture)</string>
+    <string name="ol_video_direct_small">Direct 480p (lower resolution)</string>
     <string name="ol_video_transcode">Compatible (more reliable)</string>
-    <string name="ol_video_hint">If the car screen stays black in direct mode, try 720p, then 480p; if that doesn’t help, choose compatible. Applies the next time you plug in the cable.</string>
+    <string name="ol_video_hint">If the car screen stays black in direct mode, try 720p, then 480p; if that doesn’t help, choose compatible. Applies the next time you plug in the cable. Cable (QDLink) only: in GAP Smart Tool the picture is always direct 1080p.</string>
 
     <string name="ol_save_log">Save log</string>
     <string name="ol_saved">Saved: %1$s</string>
@@ -97,9 +97,11 @@
     <string name="ol_plug_cable">Plug the cable into the car’s USB port</string>
     <string name="ol_car_not_found">Car not found. Plug the cable into the car’s USB port</string>
     <string name="ol_no_usb_permission">No USB permission: reconnect the cable and choose OvertakeLink</string>
-    <string name="ol_usb_busy">USB is used by another app: close the stock QDLink and reconnect the cable</string>
+    <string name="ol_usb_busy">Couldn’t open USB: reconnect the cable; if the stock QDLink is running, close it</string>
     <string name="ol_sim_unavailable">Head unit simulator %1$s unavailable: %2$s</string>
-    <string name="ol_waiting_hu">Car connected, waiting for the head unit (up to 30 s)</string>
+    <string name="ol_waiting_hu">Car connected, waiting for the head unit</string>
+    <string name="ol_hu_silent">The head unit does not see the phone</string>
+    <string name="ol_hu_silent_text">Unplug the cable from the phone, wait 5–10 seconds and plug it back in</string>
     <string name="ol_video_failed">Couldn’t start video: %1$s</string>
     <string name="ol_video_failed_direct">Couldn’t start video: %1$s. Choose the “Compatible” video mode</string>
     <string name="ol_aa_starting">Car screen ready, starting Android Auto</string>
@@ -116,4 +118,28 @@
     <string name="ol_car_mic_on">Car microphone: on</string>
     <string name="ol_car_mic_off">Car microphone: off</string>
     <string name="ol_permissions_in_settings">Allow “Notifications” and “Microphone” in the app settings, then come back</string>
+    <string name="ol_donate">Support</string>
+    <string name="ol_donate_title">Support OvertakeLink</string>
+    <string name="ol_donate_text">The app is free and will stay free. If it helps you, you can support the author with any amount. It is voluntary and changes nothing in the app.</string>
+    <string name="ol_donate_sbp">Transfer via SBP</string>
+    <string name="ol_donate_sbp_note">A bank selection page will open</string>
+    <string name="ol_donate_thanks">Thank you!</string>
+    <string name="ol_donate_open_failed">Couldn’t open the link: %1$s</string>
+    <!-- «Поддержать»: перевод по СБП (та же ссылка, что в GAP Smart Tool); вход — только в русском интерфейсе. -->
+    <string name="ol_donate_url" translatable="false">https://www.sberbank.ru/ru/choise_bank?requisiteNumber=79586230781&amp;bankCode=100000000111</string>
+    <string name="ol_output_title">Where to show Android Auto</string>
+    <string name="ol_output_usb">By cable (QDLink)</string>
+    <string name="ol_output_usb_note">As before: the head unit’s own QDLink</string>
+    <string name="ol_output_gap">In GAP Smart Tool over Wi-Fi</string>
+    <string name="ol_output_gap_note">Next to the GAP Smart Tool menu, without QDLink. Needs the phone’s hotspot and GAP Smart Tool on the head unit. The cable connection through QDLink is not used in this mode</string>
+    <string name="ol_gap_off_title">Output to GAP Smart Tool is off</string>
+    <string name="ol_gap_off">Tap “Turn on” or choose the output in Settings</string>
+    <string name="ol_gap_searching">Looking for GAP Smart Tool</string>
+    <string name="ol_gap_searching_detail">Turn on the phone’s hotspot and connect the head unit to it: GAP Smart Tool → Settings → Wi-Fi</string>
+    <string name="ol_gap_running">Android Auto in GAP Smart Tool</string>
+    <string name="ol_gap_running_detail">Path: Wi-Fi, the phone’s hotspot · interface %1$d×%2$d</string>
+    <string name="ol_gap_aa_starting">GAP Smart Tool connected, starting Android Auto</string>
+    <string name="ol_gap_aa_failed">Android Auto did not start — open OvertakeLink and turn it on again</string>
+    <string name="ol_gap_port_failed">The port for GAP Smart Tool did not open: %1$s</string>
+    <string name="ol_gap_start">Turn on</string>
 </resources>

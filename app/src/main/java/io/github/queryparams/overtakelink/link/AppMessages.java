@@ -65,40 +65,56 @@ public final class AppMessages {
         return sb.toString();
     }
 
-    /** Разбор сообщения; null, если формат или CRC не сошлись. */
+    /** Разбор сообщения; null, если формат или CRC не сошлись. Длины полей — в байтах UTF-8, разбор — по байтам. */
     public static Message parse(byte[] b, int off, int len) {
         try {
-            String s = new String(b, off, len, StandardCharsets.UTF_8);
-            if (!s.startsWith("A6A6") && !s.startsWith("a6a6")) {
+            if (len < 20 || !hexAscii(b, off, 4).equalsIgnoreCase("A6A6")) {
                 return null;
             }
-            int crc = Integer.parseInt(s.substring(len - 4), 16);
-            if (crc16(b, off, off + len - 4) != crc) {
+            int end = off + len;
+            int crc = hex(b, end - 4, 4);
+            if (crc16(b, off, end - 4) != crc) {
                 return null;
             }
             Message m = new Message();
-            m.flowId = Integer.parseInt(s.substring(4, 6), 16);
-            int p = 14;
-            int appLen = Integer.parseInt(s.substring(p, p + 2), 16);
+            m.flowId = hex(b, off + 4, 2);
+            int p = off + 14;
+            int appLen = hex(b, p, 2);
             p += 2;
-            m.appId = s.substring(p, p + appLen);
+            m.appId = utf8(b, p, appLen, end - 4);
             p += appLen;
-            int logicLen = Integer.parseInt(s.substring(p, p + 2), 16);
+            int logicLen = hex(b, p, 2);
             p += 2;
-            m.logicId = s.substring(p, p + logicLen);
+            m.logicId = utf8(b, p, logicLen, end - 4);
             p += logicLen;
-            int count = Integer.parseInt(s.substring(p, p + 2), 16);
+            int count = hex(b, p, 2);
             p += 2;
             for (int i = 0; i < count; i++) {
-                int dl = Integer.parseInt(s.substring(p, p + 8), 16);
+                int dl = hex(b, p, 8);
                 p += 8;
-                m.data.add(s.substring(p, p + dl));
+                m.data.add(utf8(b, p, dl, end - 4));
                 p += dl;
             }
             return m;
         } catch (RuntimeException e) {
             return null;
         }
+    }
+
+    private static String hexAscii(byte[] b, int from, int n) {
+        return new String(b, from, n, StandardCharsets.US_ASCII);
+    }
+
+    private static int hex(byte[] b, int from, int n) {
+        return Integer.parseInt(hexAscii(b, from, n), 16);
+    }
+
+    /** Поле из n байт с from; выходит за тело сообщения (до CRC) — сообщение битое. */
+    private static String utf8(byte[] b, int from, int n, int limit) {
+        if (n < 0 || from + n > limit) {
+            throw new IllegalArgumentException("поле за пределами сообщения");
+        }
+        return new String(b, from, n, StandardCharsets.UTF_8);
     }
 
     // ---------- значения в поле data ----------

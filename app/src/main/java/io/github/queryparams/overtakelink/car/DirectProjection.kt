@@ -47,10 +47,17 @@ object DirectProjection {
     /** Нужен ключевой кадр с SPS/PPS: начало показа, запрос ГУ или отброшенные кадры. */
     @Volatile private var needKey = true
     @Volatile private var framesFromAa = 0L
+    /** Сколько кадров AA было к началу текущего подключения AA: «первый кадр» — свой у каждого подключения. */
+    @Volatile private var framesAtTransport = 0L
     @Volatile private var closed = false
     private var wasProjecting = false
     private var downTime = 0L
+    /** Заставки по тексту и размеру кадра: смена прямого режима (1080p → 480p) — другая заставка. */
     private val splashes = HashMap<String, Frame>()
+    /** Отправка кадров AA и заставки — по очереди: заставка не вклинивается в уже идущий поток AA. */
+    private val sendLock = Any()
+    /** Номер показа (start): заставка от прошлого показа в новый не уходит. */
+    @Volatile private var generation = 0
 
 
     /**
@@ -65,35 +72,57 @@ object DirectProjection {
 
     /** Настройки приёмника AA под прямой режим: H.264, 30 к/с — 1080p при 60 к/с (уровень 4.2) декодер ГУ на MT6735 не принимает. */
     @JvmStatic
-    fun prepareSettings(settings: Settings, size: Size) {
+    fun prepareSettings(settings: Settings, size: Size) = prepareSettings(settings, size, false)
+
+    /**
+     * fitScreen — экран показывает кадр без растяжения (GAP Smart Tool): AA рисует интерфейс в полосе пропорций экрана,
+     * остальное — поля (CONTAIN). Без него — весь кадр, ГУ растягивает (QDLink).
+     */
+    @JvmStatic
+    fun prepareSettings(settings: Settings, size: Size, fitScreen: Boolean) {
         settings.resolutionId = size.resolution.id
-        settings.videoFitMode = Settings.VideoFitMode.FILL
+        settings.videoFitMode = if (fitScreen) Settings.VideoFitMode.CONTAIN else Settings.VideoFitMode.FILL
         // Один холст интерфейса (~853 dp в ширину) для всех размеров: автоматика OHU даёт 150 dpi на
         // 800 px ширины, но не выше 240 — в 1080p холст вырос бы до 1280 dp и интерфейс измельчал.
         settings.dpiPixelDensity = size.width * 150 / 800
+        // Полоса интерфейса в GAP Smart Tool низкая (1920×713 у 1080p): при 360 dpi в ней ~317 dp высоты — мелко и тесно
+        // для AA; 240 dpi — ~1280×475 dp, как у обычной широкой магнитолы.
+        if (fitScreen) settings.dpiPixelDensity = 240
         settings.videoCodec = VideoDecoder.CodecType.H264.settingsValue
         settings.fpsLimit = 30
     }
 
     @JvmStatic
-    fun start(context: Context, width: Int, height: Int, size: Size, sink: Sink) {
+    fun start(context: Context, width: Int, height: Int, size: Size, sink: Sink) = start(context, width, height, size, sink, false)
+
+    @JvmStatic
+    fun start(context: Context, width: Int, height: Int, size: Size, sink: Sink, fitScreen: Boolean) {
         val app = App.provide(context)
         this.context = context.applicationContext
-        this.sink = sink
+        val gen: Int
+        // Получатель и поколение меняются под той же блокировкой, что и отправка: дочитанный кадр прошлого показа
+        // не уйдёт новому получателю.
+        synchronized(sendLock) {
+            this.sink = sink
+            sps = null
+            pps = null
+            needKey = true
+            framesFromAa = 0
+            framesAtTransport = 0
+            generation++
+            gen = generation
+        }
         carWidth = width
         carHeight = height
-        sps = null
-        pps = null
-        needKey = true
-        framesFromAa = 0
+        synchronized(splashes) { splashes.clear() }
         closed = false
         wasProjecting = false
         noticeText = null
-        prepareSettings(app.settings, size)
+        prepareSettings(app.settings, size, fitScreen)
         val car = CarScreen.windowContext(context) ?: context
         HeadUnitScreenConfig.init(car, car.resources.displayMetrics, app.settings)
         HeadUnitScreenConfig.updateSurfaceDimensions(width, height)
-        app.videoDecoder.passthrough = ::onAccessUnit
+        app.videoDecoder.passthrough = { b, o, l -> onAccessUnit(b, o, l, gen) }
         val s = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         scope = s
         s.launch {
@@ -109,6 +138,8 @@ object DirectProjection {
         scope?.cancel()
         scope = null
         main.removeCallbacks(firstFrameWatchdog)
+        main.removeCallbacks(splashCheck)
+        pendingSplash.set(null)
         sink = null
         context = null
     }
@@ -124,6 +155,7 @@ object DirectProjection {
                 wasProjecting = true
                 noticeText = null
                 closed = false
+                framesAtTransport = framesFromAa
                 EventLog.add("Экран машины: AA рисует ${frameWidth()}x${frameHeight()}, ГУ растягивает на ${carWidth}x$carHeight")
                 main.removeCallbacks(firstFrameWatchdog)
                 main.post(firstFrameWatchdog)
@@ -142,7 +174,7 @@ object DirectProjection {
         override fun run() {
             val ctx = context ?: return
             val comm = App.provide(ctx).commManager
-            if (framesFromAa > 0 || comm.connectionState.value !is CommManager.ConnectionState.TransportStarted) return
+            if (framesFromAa > framesAtTransport || comm.connectionState.value !is CommManager.ConnectionState.TransportStarted) return
             comm.send(VideoFocusEvent(gain = true, unsolicited = true))
             main.postDelayed(this, 1500)
         }
@@ -160,12 +192,19 @@ object DirectProjection {
             if (cycle != null) {
                 main.postDelayed({ comm.retakeVideoFocusForKeyframe(cycle) }, WarmRelaunchKeyframePolicy.FOCUS_CYCLE_GAP_MS)
             }
-            val asked = framesFromAa
-            // AA не ответил кадром за секунду (ещё грузится) — пусть на экране будет заставка.
-            main.postDelayed({ if (framesFromAa == asked && sink != null) showSplash(text(R.string.ol_car_starting)) }, 1500)
+            // AA не ответил кадром за секунду (ещё грузится) — пусть на экране будет заставка. Проверка одна на все
+            // запросы: повторные лишь перезаводят её, очередь главного потока не растёт.
+            splashCheckAsked = framesFromAa
+            main.removeCallbacks(splashCheck)
+            main.postDelayed(splashCheck, 1500)
         } else {
             showSplash(noticeText ?: text(if (closed) R.string.ol_car_closed else R.string.ol_car_starting))
         }
+    }
+
+    @Volatile private var splashCheckAsked = 0L
+    private val splashCheck = Runnable {
+        if (framesFromAa == splashCheckAsked && sink != null) showSplash(text(R.string.ol_car_starting))
     }
 
     /** Сообщение на экране машины вместо картинки AA (например, «сервер AA выключен»). */
@@ -179,17 +218,37 @@ object DirectProjection {
 
     private fun text(id: Int) = context?.getString(id) ?: ""
 
+    /** Ожидающая заставка — одна, последняя; кодирует её один рабочий поток. */
+    private class SplashRequest(val text: String, val aaAtRequest: Long, val gen: Int)
+    private val pendingSplash = java.util.concurrent.atomic.AtomicReference<SplashRequest?>(null)
+    private val splashWorker = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "ol-splash") }
+    private val splashScheduled = java.util.concurrent.atomic.AtomicBoolean(false)
+
     private fun showSplash(text: String) {
-        Thread({
+        // Повторные запросы ГУ сливаются: потоков и ожидающих заставок не копится.
+        pendingSplash.set(SplashRequest(text, framesFromAa, generation))
+        if (!splashScheduled.compareAndSet(false, true)) return
+        splashWorker.execute {
+            splashScheduled.set(false)
+            val req = pendingSplash.getAndSet(null) ?: return@execute
             try {
+                // Устаревший показ — не кодируем зря.
+                if (req.gen != generation) return@execute
                 val frame = synchronized(splashes) {
-                    splashes.getOrPut(text) { splash(text) }
+                    splashes.getOrPut("${req.text}|${frameWidth()}x${frameHeight()}") { splash(req.text) }
                 }
-                send(frame)
+                synchronized(sendLock) {
+                    // Пока заставка кодировалась, пошли кадры AA (или начался новый показ) — она уже не нужна:
+                    // её SPS/PPS и IDR поверх потока AA испортили бы картинку до следующего ключевого кадра.
+                    if (framesFromAa != req.aaAtRequest || generation != req.gen) return@execute
+                    send(frame)
+                    // Следующие кадры AA ссылались бы на свой опорный кадр, а на экране — заставка: ждём IDR от AA.
+                    needKey = true
+                }
             } catch (e: Exception) {
                 EventLog.error("заставка экрана машины", e)
             }
-        }, "ol-splash").start()
+        }
     }
 
     /**
@@ -208,19 +267,25 @@ object DirectProjection {
      * пакет, который начинается с IDR, и до первого такого выбрасывает всё; SPS+PPS+IDR одним
      * пакетом для него — просто SPS.
      */
-    private class Frame(val config: ByteArray?, val slices: ByteArray, val key: Boolean)
+    private class Frame(val config: ByteArray?, val slices: ByteArray, val slicesLen: Int, val key: Boolean)
+
+    /** Срезы кадра без лишней копии: отдаём внутренний буфер и его заполненную длину. */
+    private class Slices(size: Int) : ByteArrayOutputStream(size) {
+        fun raw(): ByteArray = buf
+        fun length(): Int = count
+    }
 
     private fun send(f: Frame) {
         val s = sink ?: return
         if (f.config != null) s.frame(f.config, 0, f.config.size, true)
-        s.frame(f.slices, 0, f.slices.size, f.key)
+        s.frame(f.slices, 0, f.slicesLen, f.key)
     }
 
     /** Единица доступа Annex-B → [Frame]; null, если в ней нет кадра (только SPS/PPS). */
     private fun frame(buf: ByteArray, off: Int, len: Int, fromAa: Boolean): Frame? {
         var sp: ByteArray? = null
         var pp: ByteArray? = null
-        val slices = ByteArrayOutputStream(len)
+        val slices = Slices(len)
         var key = false
         forEachNal(buf, off, len) { s, e ->
             when (val type = buf[s].toInt() and 31) {
@@ -257,17 +322,25 @@ object DirectProjection {
                 config = out.toByteArray()
             }
         }
-        return Frame(config, slices.toByteArray(), key)
+        return Frame(config, slices.raw(), slices.length(), key)
     }
 
     /** Кадр от AA (поток видео OHU): Annex-B, одна единица доступа. */
-    private fun onAccessUnit(buf: ByteArray, off: Int, len: Int) {
-        val f = frame(buf, off, len, true) ?: return
-        framesFromAa++
-        if (needKey && !f.key) return
-        if (f.key) needKey = false
-        send(f)
+    private fun onAccessUnit(buf: ByteArray, off: Int, len: Int, gen: Int) {
+        synchronized(sendLock) {
+            // Кадр прошлого показа (быстрое переподключение) — не наш: ни разбор SPS, ни отправка.
+            if (gen != generation) return
+            val f = frame(buf, off, len, true) ?: return
+            framesFromAa++
+            if (needKey && !f.key) return
+            if (f.key) needKey = false
+            send(f)
+        }
     }
+
+    /** Кадр AA и поля вокруг интерфейса: [ширина, высота, поле по ширине, поле по высоте]. */
+    @JvmStatic
+    fun geometry(): IntArray = intArrayOf(frameWidth(), frameHeight(), HeadUnitScreenConfig.getWidthMargin(), HeadUnitScreenConfig.getHeightMargin())
 
     private fun frameWidth(): Int = HeadUnitScreenConfig.getNegotiatedWidth()
 

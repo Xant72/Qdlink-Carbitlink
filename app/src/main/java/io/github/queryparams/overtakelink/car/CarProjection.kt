@@ -161,7 +161,7 @@ class CarProjection private constructor(context: Context, display: Display) :
     }
 
     /** Касание с экрана ГУ: action как в MotionEvent, координаты — пиксели экрана машины. */
-    private fun touch(action: Int, x: Float, y: Float) {
+    private fun handleTouch(action: Int, x: Float, y: Float) {
         if (closed) {
             if (action == MotionEvent.ACTION_UP) {
                 closed = false
@@ -227,8 +227,11 @@ class CarProjection private constructor(context: Context, display: Display) :
 
         /** Показать Android Auto на экране машины (с любого потока). */
         @JvmStatic
-        fun show(context: Context) = main.post {
-            val display = CarScreen.current()?.display() ?: return@post
+        fun show(context: Context, screen: CarScreen) = main.post {
+            // Показ привязан к своему экрану: если до исполнения кабель переподключили и экран сменился,
+            // старая презентация не создаётся и не перепишет настройки нового показа.
+            if (CarScreen.current() !== screen) return@post
+            val display = screen.display() ?: return@post
             if (current != null) return@post
             try {
                 current = CarProjection(context.applicationContext, display).also { it.show() }
@@ -248,18 +251,74 @@ class CarProjection private constructor(context: Context, display: Display) :
             current = null
         }
 
+        /** Касания по порядку для главного потока: подряд идущие движения сливаются, нажатия и отпускания — нет. */
+        private val touches = ArrayDeque<FloatArray>()
+        private var touchesScheduled = false
+        private const val TOUCHES_MAX = 64
+        private val redrawPending = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        /**
+         * Касание с экрана ГУ. Порядок DOWN → MOVE → UP сохраняется; подряд идущие движения сливаются в одно с
+         * последними координатами, так что очередь не растёт, если главный поток не успевает. Переполнение (за 64
+         * события) — сначала выпадают движения, границы жеста остаются.
+         */
         @JvmStatic
-        fun touch(action: Int, x: Float, y: Float) = main.post { current?.touch(action, x, y) }
+        fun touch(action: Int, x: Float, y: Float) {
+            synchronized(touches) {
+                val last = touches.lastOrNull()
+                if (action == MotionEvent.ACTION_MOVE && last != null && last[0].toInt() == MotionEvent.ACTION_MOVE) {
+                    last[1] = x
+                    last[2] = y
+                } else {
+                    if (touches.size >= TOUCHES_MAX) {
+                        val move = touches.indexOfFirst { it[0].toInt() == MotionEvent.ACTION_MOVE }
+                        if (move >= 0) {
+                            touches.removeAt(move)
+                        } else {
+                            // Одни нажатия и отпускания — главный поток сильно отстал. Не терять конец жеста молча:
+                            // всё накопленное отменяется, AA получает отмену (палец не «зависнет»), новое нажатие — заново.
+                            touches.clear()
+                            touches.addLast(floatArrayOf(MotionEvent.ACTION_CANCEL.toFloat(), x, y))
+                            if (action != MotionEvent.ACTION_DOWN) {
+                                if (!touchesScheduled) {
+                                    touchesScheduled = true
+                                    main.post(drainTouches)
+                                }
+                                return
+                            }
+                        }
+                    }
+                    touches.addLast(floatArrayOf(action.toFloat(), x, y))
+                }
+                if (touchesScheduled) return
+                touchesScheduled = true
+            }
+            main.post(drainTouches)
+        }
+
+        private val drainTouches = Runnable {
+            while (true) {
+                val e = synchronized(touches) {
+                    touches.removeFirstOrNull() ?: run { touchesScheduled = false; null }
+                } ?: break
+                current?.handleTouch(e[0].toInt(), e[1], e[2])
+            }
+        }
 
         /**
          * Новый кадр без изменений на экране AA: ГУ начало показ или просит ключевой кадр, а
          * неподвижная картинка иначе не дала бы кодировщику ни одного кадра — на ГУ был бы чёрный экран.
          */
         @JvmStatic
-        fun redraw() = main.post {
-            val p = current?.nudgePixel ?: return@post
-            p.setBackgroundColor(if (p.tag == true) Color.BLACK else 0xFF010101.toInt())
-            p.tag = p.tag != true
+        fun redraw() {
+            // Частые запросы ключевого кадра — одна перерисовка в очереди, а не сотни.
+            if (!redrawPending.compareAndSet(false, true)) return
+            main.post {
+                redrawPending.set(false)
+                val p = current?.nudgePixel ?: return@post
+                p.setBackgroundColor(if (p.tag == true) Color.BLACK else 0xFF010101.toInt())
+                p.tag = p.tag != true
+            }
         }
     }
 }

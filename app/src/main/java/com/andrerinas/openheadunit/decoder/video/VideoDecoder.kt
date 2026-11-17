@@ -42,6 +42,7 @@ class VideoDecoder(
     companion object {
         private const val TIMEOUT_US = 10000L
         private const val MAX_RESTARTS_WITHOUT_FRAME = 3
+        private const val START_FAILED_REASON = "decoder_start_failed"
 
         // sync_stall watchdog tuning. An intermittently slow decoder — one that renders, just not
         // within SYNC_STALL_THRESHOLD_MS — escapes restartsSinceLastFrame's cap, which counts only
@@ -258,6 +259,10 @@ class VideoDecoder(
     private var reportedBackpressure = false
     private var restartsSinceLastFrame = 0
     private var codecFallbackUsed = false
+    // A hardware component that cannot start at all next to a running encoder (measured: Xiaomi
+    // 2201116PG in transcode mode, both c2.qti.avc and c2.qti.hevc fail in start()) gets the platform
+    // software decoder of the same type before the H.264/H.265 flip.
+    private var softwareFallbackUsed = false
     private var decoderPermanentlyFailed = false
     // True once any frame of this session has rendered. Session-scoped where lastFrameRenderedMs
     // is start-scoped: every stop() zeroes that timestamp, so after a surface swap a stream that
@@ -862,6 +867,8 @@ class VideoDecoder(
             // all, which is what the "Fallback to negotiated dimensions" line reports - measured
             // once per relaunch, on every backend, in every capture of the video-black round 6.
             if (DecoderStopPolicy.endsSession(reason)) {
+                // Программный декодер выбран для этого сеанса: смена поверхности не возвращает неисправный аппаратный.
+                softwareFallbackUsed = false
                 codecTypePinned = false
                 renderedThisSession = false
                 vps = null
@@ -956,13 +963,20 @@ class VideoDecoder(
                 // them walked healthy sessions through the flip and into the permanent latch.
                 if (DecoderRestartPolicy.countsTowardFailure(
                         codecTypePinned,
+                        startFailed = decoderRestartReason?.startsWith(START_FAILED_REASON) == true,
                         renderedSinceLastStart = lastFrameRenderedMs != 0L,
                         renderedThisSession = renderedThisSession
                     )
                 ) {
                     restartsSinceLastFrame++
                     if (restartsSinceLastFrame >= MAX_RESTARTS_WITHOUT_FRAME) {
-                        if (!codecFallbackUsed) {
+                        val softwareName = if (softwareFallbackUsed || settings.forceSoftwareDecoding) null
+                            else findBestCodec(currentCodecType.mimeType, false)
+                        if (softwareName != null && softwareName != currentCodecName) {
+                            AppLog.e("${currentCodecType.displayName} hardware decoder ${currentCodecName} failed $restartsSinceLastFrame times in a row without rendering a frame. Falling back to the software decoder $softwareName.")
+                            softwareFallbackUsed = true
+                            restartsSinceLastFrame = 0
+                        } else if (!codecFallbackUsed) {
                             val fallbackType = if (currentCodecType == CodecType.H264) CodecType.H265 else CodecType.H264
                             // Don't burn the one-time fallback on a codec type the device has no
                             // decoder for at all (hw or sw) - e.g. HEVC on a pre-Lollipop device
@@ -1061,10 +1075,11 @@ class VideoDecoder(
                 if (mSurface == null || !mSurface!!.isValid) return
                 if (mWidth == 0 || mHeight == 0) return
 
-                if (shouldUseBundledHevc(typeToUse, settings.forceSoftwareDecoding || forceSoftware)) {
+                val software = settings.forceSoftwareDecoding || forceSoftware || softwareFallbackUsed
+                if (shouldUseBundledHevc(typeToUse, software)) {
                     startBundledHevc(mWidth, mHeight)
                 } else {
-                    start(typeToUse.mimeType, settings.forceSoftwareDecoding || forceSoftware, mWidth, mHeight)
+                    start(typeToUse.mimeType, software, mWidth, mHeight)
                 }
             }
 
@@ -1881,7 +1896,7 @@ class VideoDecoder(
                 AppLog.w("Decoder start aborted: the surface went away mid-configure. Waiting for a new one.")
                 return
             }
-            scheduleRestart("decoder_start_failed: ${e.message}")
+            scheduleRestart("$START_FAILED_REASON: ${e.message}")
         }
     }
 

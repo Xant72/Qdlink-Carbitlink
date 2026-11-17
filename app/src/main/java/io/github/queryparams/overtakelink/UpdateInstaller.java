@@ -34,6 +34,49 @@ final class UpdateInstaller {
     }
 
     private static volatile boolean running;
+    /** Окно OvertakeLink на экране (из фона Android не даёт открыть установщик). */
+    private static volatile boolean visible;
+    /** Скачанный и проверенный APK ждёт возвращения приложения на экран. */
+    private static volatile File pending;
+
+    /**
+     * Убрать скачанный APK, если он ничего не ждёт: установили (процесс новый), загрузка оборвалась или так и не
+     * поставили — файл в кэше больше не нужен и только занимает место.
+     */
+    static void cleanup(Context context) {
+        // Отдан установщику в этом процессе — он может ещё читать файл; после обновления процесс новый и флаг снят.
+        if (running || pending != null || handedOver) {
+            return;
+        }
+        File dir = new File(context.getCacheDir(), "update");
+        File[] files = dir.listFiles();
+        for (File f : files == null ? new File[0] : files) {
+            f.delete();
+        }
+    }
+
+    /** Окно на экране / ушло с экрана; вернулось и обновление ждёт — открыть установщик. */
+    static void visible(Activity activity, boolean on) {
+        visible = on;
+        File apk = pending;
+        if (on && apk != null) {
+            pending = null;
+            if (apk.isFile()) {
+                install(activity.getApplicationContext(), apk);
+            }
+        }
+    }
+
+    /** APK отдан установщику в этом процессе. */
+    private static volatile boolean handedOver;
+
+    private static void install(Context app, File apk) {
+        handedOver = true;
+        Uri uri = FileProvider.getUriForFile(app, app.getPackageName() + ".fileprovider", apk);
+        app.startActivity(new Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK));
+    }
 
     private UpdateInstaller() {
     }
@@ -66,21 +109,26 @@ final class UpdateInstaller {
             } catch (Exception e) {
                 error = e.getMessage();
                 EventLog.add("Обновление: загрузка не удалась (" + error + ")");
+                // Недокачанный файл не оставляем: следующая загрузка всё равно начнётся заново.
+                apk.delete();
             }
-            running = false;
             String failed = error;
             main.post(() -> {
+                // «Загрузка идёт» снимаем здесь, в главном потоке, вместе с передачей файла под защиту (pending или
+                // установщик): cleanup() из onCreate тоже на главном и не попадёт между ними.
+                running = false;
                 if (failed != null) {
                     progress.show(activity.getString(R.string.ol_update_failed));
                     return;
                 }
                 progress.show(null);
-                // Контекст приложения: пока шла загрузка, окно OvertakeLink могли закрыть.
-                Context app = activity.getApplicationContext();
-                Uri uri = FileProvider.getUriForFile(app, app.getPackageName() + ".fileprovider", apk);
-                app.startActivity(new Intent(Intent.ACTION_VIEW)
-                        .setDataAndType(uri, "application/vnd.android.package-archive")
-                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK));
+                // Окно свернули, пока шла загрузка: из фона Android установщик не откроет — ждём возвращения.
+                if (!visible) {
+                    pending = apk;
+                    EventLog.add("Обновление: скачано, установщик откроется, когда приложение снова на экране");
+                    return;
+                }
+                install(activity.getApplicationContext(), apk);
             });
         }, "ol-update-download").start();
     }
