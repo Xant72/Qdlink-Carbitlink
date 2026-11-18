@@ -68,7 +68,7 @@ from the file (more in [Privacy](PRIVACY.md)).
 ## Requirements
 
 **Phone**
-- **Android 12 or newer** and the Android Auto app from Google Play.
+- **Android 11 or newer** and the Android Auto app from Google Play.
 - Any processor from 2018 or newer, **4 GB of RAM or more** (this is Android Auto’s own
   requirement; OvertakeLink takes about 200 MB).
 - The load depends on the video mode (Settings → “Video to the car screen”):
@@ -100,7 +100,7 @@ from the file (more in [Privacy](PRIVACY.md)).
   for the cable connection: the new one takes effect once you unplug the cable and plug it back in. With output to
   GAP Smart Tool over Wi-Fi the quality is always 1080p and this setting does not affect it.
 
-**Tested:** Xiaomi 14 Ultra (Android 15, HyperOS) + Geely Atlas Pro 2023; Android 15 emulator with a
+**Tested:** Xiaomi 14 Ultra (Android 15, HyperOS) + Geely Atlas Pro 2023; Android 11 and 15 emulators with a
 head unit simulator. Other combinations — please report how it went.
 
 ## Terms of use

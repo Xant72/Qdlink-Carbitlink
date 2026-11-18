@@ -101,6 +101,8 @@ public final class OvertakeLinkActivity extends Activity {
         String car = getSharedPreferences("overtakelink", MODE_PRIVATE).getString("carScreen", null);
         title.addView(text(car == null ? getString(R.string.ol_car_never) : getString(R.string.ol_car_screen, car), 12, MUTED, false));
         head.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        LinearLayout buttons = row();
+        head.addView(buttons);
         // «Поддержать» — только в русском интерфейсе: перевод по СБП работает с российскими картами.
         if (donateAvailable()) {
             // Заметно, но не кричит: розовая рамка и лёгкая заливка, как кнопка «Условия» рядом.
@@ -118,7 +120,7 @@ public final class OvertakeLinkActivity extends Activity {
             LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT);
             hlp.setMargins(0, 0, dp(8), 0);
-            head.addView(heart, hlp);
+            buttons.addView(heart, hlp);
         }
         // Условия и отказ от ответственности — всегда под рукой, на любом экране.
         TextView terms = text(getString(R.string.ol_terms_short), 13, TEXT, false);
@@ -132,8 +134,37 @@ public final class OvertakeLinkActivity extends Activity {
             }
             show("terms");
         });
-        head.addView(terms);
+        buttons.addView(terms);
         root.addView(head);
+        // Узкий экран или крупный шрифт: название с кнопками в строку не влезает — кнопки строкой под ним. Решает
+        // ширина шапки, а не перенос названия: окно расширили — снова одна строка.
+        head.addOnLayoutChangeListener((v, l, tp, r, b, ol, ot, or, ob) -> {
+            if (r - l == or - ol && head.getTag() != null) {
+                return;
+            }
+            // Ширина по тексту и отступам, без пробного измерения: оно перестроило бы текст уже показанных кнопок.
+            int need = textWidth(logo);
+            for (int i = 0; i < buttons.getChildCount(); i++) {
+                TextView bt = (TextView) buttons.getChildAt(i);
+                ViewGroup.MarginLayoutParams m = (ViewGroup.MarginLayoutParams) bt.getLayoutParams();
+                need += textWidth(bt) + bt.getPaddingLeft() + bt.getPaddingRight() + m.leftMargin + m.rightMargin;
+            }
+            boolean stack = need > r - l - head.getPaddingLeft() - head.getPaddingRight();
+            if (Boolean.valueOf(stack).equals(head.getTag())) {
+                return;
+            }
+            head.setTag(stack);
+            head.post(() -> {
+                head.setOrientation(stack ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+                title.setLayoutParams(stack
+                        ? new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                        : new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+                LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT);
+                blp.setMargins(0, stack ? dp(10) : 0, 0, 0);
+                buttons.setLayoutParams(blp);
+            });
+        });
 
         ScrollView scroll = new ScrollView(this);
         content = new LinearLayout(this);
@@ -676,6 +707,10 @@ public final class OvertakeLinkActivity extends Activity {
         g.setColor(color);
         g.setCornerRadius(dp(radiusDp));
         return g;
+    }
+
+    private static int textWidth(TextView t) {
+        return (int) Math.ceil(android.text.Layout.getDesiredWidth(t.getText(), t.getPaint()));
     }
 
     private LinearLayout row() {

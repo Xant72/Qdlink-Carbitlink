@@ -91,12 +91,12 @@ android {
         // changed to Open Headunit. The code package and namespace stay openheadunit, so the
         // applicationId deliberately differs from the namespace, like com.google.talk for Hangouts.
         applicationId = "io.github.queryparams.overtakelink"
-        // OvertakeLink: виртуальный дисплей машины (createWindowContext) и FGS с микрофоном — Android 12+.
-        minSdk = 31
+        // OvertakeLink: окно на виртуальном дисплее машины (createWindowContext) и служба с микрофоном — Android 11+.
+        minSdk = 30
         targetSdk = 36
         // OvertakeLink: код версии = мажор*10000 + минор*100 + патч, всегда выше кодов Open Headunit.
-        versionCode = 10000
-        versionName = "1.0.0"
+        versionCode = 10100
+        versionName = "1.1.0"
         setProperty("archivesBaseName", "${applicationId}_${versionName}")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true

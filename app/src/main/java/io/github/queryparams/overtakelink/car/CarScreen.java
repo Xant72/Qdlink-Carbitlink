@@ -47,6 +47,8 @@ public final class CarScreen {
     private MediaCodec codec;
     private Surface input;
     private VirtualDisplay display;
+    /** Android 11: контекст окна на этом дисплее (см. {@link #windowContext}); с дисплеем и уходит. */
+    private Context legacyWindowContext;
     private Thread drainThread;
     private volatile boolean running;
     private volatile boolean resendConfig;
@@ -76,7 +78,18 @@ public final class CarScreen {
         if (d == null) {
             return null;
         }
-        return base.createWindowContext(d.getDisplay(), WindowManager.LayoutParams.TYPE_PRIVATE_PRESENTATION, null);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            return base.createWindowContext(d.getDisplay(), WindowManager.LayoutParams.TYPE_PRIVATE_PRESENTATION, null);
+        }
+        // Android 11: вызова с дисплеем ещё нет — окно от контекста этого дисплея. Каждый такой контекст занимает
+        // оконный токен, а их без окна у приложения немного: один на дисплей, пока он жив.
+        synchronized (s) {
+            if (s.legacyWindowContext == null) {
+                s.legacyWindowContext = base.getApplicationContext().createDisplayContext(d.getDisplay())
+                        .createWindowContext(WindowManager.LayoutParams.TYPE_PRIVATE_PRESENTATION, null);
+            }
+            return s.legacyWindowContext;
+        }
     }
 
     public Display display() {
@@ -196,6 +209,9 @@ public final class CarScreen {
                 drainThread.join(1000);
             } catch (InterruptedException ignored) {
             }
+        }
+        synchronized (this) {
+            legacyWindowContext = null;
         }
         if (display != null) {
             display.release();

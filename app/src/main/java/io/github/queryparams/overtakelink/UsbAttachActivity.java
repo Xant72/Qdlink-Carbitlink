@@ -55,7 +55,7 @@ public final class UsbAttachActivity extends Activity {
         if (!UsbManager.ACTION_USB_ACCESSORY_ATTACHED.equals(i.getAction())) {
             return false;
         }
-        // Перегрузка с классом — только с Android 13, а приложение работает с 12.
+        // Перегрузка с классом — только с Android 13, а приложение работает с 11.
         @SuppressWarnings("deprecation")
         UsbAccessory acc = i.getParcelableExtra(UsbManager.EXTRA_ACCESSORY);
         UsbAccessory[] list = getSystemService(UsbManager.class).getAccessoryList();
