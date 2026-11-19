@@ -12,6 +12,9 @@
     <string name="ol_update_available">Version %1$s is available</string>
     <string name="ol_update_note">Installs over the current version — your settings stay.</string>
     <string name="ol_update_install">Download and install</string>
+    <string name="ol_update_install_ready">Install</string>
+    <string name="ol_update_waiting">Download waiting for network… %1$d%%</string>
+    <string name="ol_update_checking_file">Checking the file…</string>
     <string name="ol_update_allow">Allow installing and tap again</string>
     <string name="ol_update_progress">Downloading… %1$d%%</string>
     <string name="ol_update_failed">Download failed — tap again</string>

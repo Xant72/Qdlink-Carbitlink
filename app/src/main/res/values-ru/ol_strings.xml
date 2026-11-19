@@ -12,6 +12,9 @@
     <string name="ol_update_available">Доступна версия %1$s</string>
     <string name="ol_update_note">Устанавливается поверх — настройки сохранятся.</string>
     <string name="ol_update_install">Скачать и установить</string>
+    <string name="ol_update_install_ready">Установить</string>
+    <string name="ol_update_waiting">Загрузка ждёт сети… %1$d%%</string>
+    <string name="ol_update_checking_file">Проверяем файл…</string>
     <string name="ol_update_allow">Разрешите установку и нажмите ещё раз</string>
     <string name="ol_update_progress">Загрузка… %1$d%%</string>
     <string name="ol_update_failed">Не скачалось — нажмите ещё раз</string>

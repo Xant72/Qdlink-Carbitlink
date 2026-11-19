@@ -38,7 +38,9 @@ Auto, при выводе в GAP Smart Tool — IP-адрес ГУ в сети �
   (TCP-порт 47621) и принимает касания; подключения из сетей с выходом в интернет отклоняются.
 - Для проверки обновлений OvertakeLink при открытии (не чаще раза в 10 минут) и по кнопке «Проверить обновления» обращается к GitHub (`api.github.com`). При этом
   GitHub, как любой сайт, видит IP-адрес телефона, а приложение сообщает ему только своё название и версию.
-- По кнопке «Скачать и установить» файл новой версии скачивается с GitHub.
+- По кнопке «Скачать и установить» файл новой версии скачивается с GitHub (загрузчиком Android, если он не отключён);
+  файл лежит в папке приложения и удаляется при следующем открытии OvertakeLink после установки или когда выйдет
+  версия новее.
 - «Поддержать» (только в русском интерфейсе) открывает экран поддержки в приложении; кнопка «Перевести по СБП» на
   нём открывает страницу перевода на сайте Сбербанка (в браузере или банковском приложении — как настроен телефон);
   приложение само ничего туда не передаёт.
@@ -89,7 +91,9 @@ GAP Smart Tool the head unit’s IP address on the phone’s network and, among 
   hotspot (TCP port 47621) and accepts touches back; connections from networks with internet access are refused.
 - To check for updates, OvertakeLink contacts GitHub (`api.github.com`) when opened (at most once every 10 minutes) and with the “Check for updates” button. Like any
   website, GitHub sees the phone’s IP address; the app sends only its name and version.
-- With the “Download and install” button, the new version’s file is downloaded from GitHub.
+- With the “Download and install” button, the new version’s file is downloaded from GitHub (by Android’s download
+  manager unless it is disabled); the file stays in the app’s folder and is deleted the next time OvertakeLink opens
+  after the installation, or once a newer version is out.
 - “Support” (Russian interface only) opens a support screen in the app; its SBP transfer button opens the
   Sberbank transfer page (in the browser or a banking app, depending on the phone); the app itself sends nothing
   there.

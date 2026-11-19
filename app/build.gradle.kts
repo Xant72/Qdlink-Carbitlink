@@ -95,8 +95,8 @@ android {
         minSdk = 30
         targetSdk = 36
         // OvertakeLink: код версии = мажор*10000 + минор*100 + патч, всегда выше кодов Open Headunit.
-        versionCode = 10200
-        versionName = "1.2.0"
+        versionCode = 10201
+        versionName = "1.2.1"
         setProperty("archivesBaseName", "${applicationId}_${versionName}")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         multiDexEnabled = true

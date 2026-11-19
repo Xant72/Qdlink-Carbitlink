@@ -50,9 +50,11 @@ steering wheel voice button works only if the car passes it to the phone over Bl
 Assistant with “Hey Google” or the microphone icon on the car screen.
 
 **Updates:** when opened, OvertakeLink checks GitHub for new versions (including pre-releases) and shows a “Download and install”
-button on the main screen: the app downloads the new version and opens the installer. The first
-time, Android will ask you to allow OvertakeLink to install apps. The new version installs over
-the old one, settings are kept.
+button on the main screen: Android’s download manager fetches the new version (progress is in the notification
+shade, the app can be in the background; if the download manager is disabled on the phone, the app downloads it
+itself), and the installer opens while OvertakeLink is on screen. The first time, Android will ask you to allow
+OvertakeLink to install apps. If you cancel the installation, the file stays and the button becomes “Install” — no
+second download. The new version installs over the old one, settings are kept.
 
 **Interface language** — English or Russian, following the phone language.
 

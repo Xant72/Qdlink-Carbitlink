@@ -280,9 +280,11 @@ public final class OvertakeLinkActivity extends Activity {
             LinearLayout u = card();
             u.addView(text(getString(R.string.ol_update_available, update), 16, TEXT, true));
             u.addView(text(getString(R.string.ol_update_note), 13, MUTED, false));
-            Button get = button(getString(R.string.ol_update_install), true, null);
-            get.setOnClickListener(v -> UpdateInstaller.start(this,
-                    state -> get.setText(state == null ? getString(R.string.ol_update_install) : state)));
+            Button get = button(UpdateInstaller.label(this), true, null);
+            UpdateInstaller.Progress progress = state -> get.setText(state == null ? UpdateInstaller.label(this) : state);
+            // Загрузка идёт (экран перерисовали или открыли заново) — ход показывает эта кнопка.
+            UpdateInstaller.attach(progress);
+            get.setOnClickListener(v -> UpdateInstaller.start(this, progress));
             u.addView(get);
             content.addView(u, cardLp());
         }
