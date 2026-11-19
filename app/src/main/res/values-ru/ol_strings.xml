@@ -2,6 +2,8 @@
 <!-- OvertakeLink: строки своего интерфейса на русском. -->
 <resources>
     <string name="ol_car_never">машина ещё не подключалась</string>
+    <string name="ol_gap_screen">экран в GAP %1$s</string>
+    <string name="ol_gap_never">GAP Smart Tool ещё не подключался</string>
     <string name="ol_car_screen">экран машины %1$s</string>
     <string name="ol_tab_status">Статус</string>
     <string name="ol_tab_settings">Настройки</string>
@@ -86,7 +88,13 @@
     <string name="ol_video_direct_light">Прямой 720p</string>
     <string name="ol_video_direct_small">Прямой 480p (ниже разрешение)</string>
     <string name="ol_video_transcode">Совместимый (надёжнее)</string>
-    <string name="ol_video_hint">Если в прямом режиме на экране машины чёрный экран — попробуйте 720p, затем 480p, не помогло — совместимый. Применяется при следующем подключении кабеля. Только для кабеля (QDLink): в GAP Smart Tool картинка всегда прямая 1080p.</string>
+    <string name="ol_video_hint">Если в прямом режиме на экране машины чёрный экран — попробуйте 720p, затем 480p, не помогло — совместимый. Применяется при следующем подключении кабеля.</string>
+    <string name="ol_gap_video_title">Качество картинки в GAP Smart Tool</string>
+    <string name="ol_gap_video_note">Ниже качество — меньше нагрузка на ГУ, телефон и Wi-Fi; интерфейс Android Auto того же размера, только мягче.</string>
+    <string name="ol_gap_video_1080">1080p — как на экране</string>
+    <string name="ol_gap_video_720">720p — мягче, легче для ГУ</string>
+    <string name="ol_gap_video_480">480p — запасной</string>
+    <string name="ol_gap_video_hint">Экран Android Auto мелькает или рвётся — попробуйте 720p, затем 480p. Применяется при следующем подключении GAP Smart Tool, сразу — «Остановить» → «Включить».</string>
 
     <string name="ol_save_log">Сохранить лог</string>
     <string name="ol_saved">Сохранено: %1$s</string>

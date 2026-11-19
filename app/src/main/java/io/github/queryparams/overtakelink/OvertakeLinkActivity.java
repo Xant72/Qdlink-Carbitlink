@@ -58,10 +58,13 @@ public final class OvertakeLinkActivity extends Activity {
     /** Состояние, с которым нарисован «Статус» или мастер: изменилось — перерисуем. */
     private String shownSignature = "";
     private TextView logView;
+    private TextView screenLine;
 
     private final Runnable refresh = new Runnable() {
         @Override
         public void run() {
+            // Первое подключение GAP Smart Tool при открытом приложении — место в шапке сразу, на любой вкладке.
+            renderScreenLine();
             // Перерисовка только при изменениях: пересборка экрана теряет нажатие, попавшее на неё.
             if (screen.equals("status") || screen.equals("setup")) {
                 if (!screenSignature().equals(shownSignature)) {
@@ -97,9 +100,8 @@ public final class OvertakeLinkActivity extends Activity {
         TextView logo = text("OvertakeLink", 22, TEXT, true);
         logo.setText(android.text.Html.fromHtml("Overtake<font color='#FF7A45'>Link</font>", 0));
         title.addView(logo);
-        // Экран машины — каким его сообщило ГУ при последнем подключении.
-        String car = getSharedPreferences("overtakelink", MODE_PRIVATE).getString("carScreen", null);
-        title.addView(text(car == null ? getString(R.string.ol_car_never) : getString(R.string.ol_car_screen, car), 12, MUTED, false));
+        screenLine = text("", 12, MUTED, false);
+        title.addView(screenLine);
         head.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         LinearLayout buttons = row();
         head.addView(buttons);
@@ -236,7 +238,27 @@ public final class OvertakeLinkActivity extends Activity {
         render();
     }
 
+    /** Под названием — место для Android Auto: у GAP Smart Tool — что он прислал, у кабеля — что сообщило ГУ. */
+    private void renderScreenLine() {
+        android.content.SharedPreferences p = getSharedPreferences("overtakelink", MODE_PRIVATE);
+        if (GapService.selected(this)) {
+            String gap = p.getString(GapService.PREF_GAP_SCREEN, null);
+            setIfChanged(screenLine, gap == null ? getString(R.string.ol_gap_never) : getString(R.string.ol_gap_screen, gap));
+        } else {
+            String car = p.getString("carScreen", null);
+            setIfChanged(screenLine, car == null ? getString(R.string.ol_car_never) : getString(R.string.ol_car_screen, car));
+        }
+    }
+
+    /** Тот же текст не ставим: лишняя перекладка экрана раз в секунду. */
+    private static void setIfChanged(TextView v, String s) {
+        if (!s.contentEquals(v.getText())) {
+            v.setText(s);
+        }
+    }
+
     private void render() {
+        renderScreenLine();
         shownSignature = screenSignature();
         content.removeAllViews();
         logView = null;
@@ -599,6 +621,22 @@ public final class OvertakeLinkActivity extends Activity {
         output.addView(button(getString(R.string.ol_output_gap), gap, v -> setOutput(GapService.OUTPUT_GAP)));
         content.addView(output, cardLp());
 
+        if (gap) {
+            // В GAP картинка всегда прямая: «Совместимого» нет, качество — своё, кабельное не трогаем.
+            LinearLayout q = card();
+            q.addView(text(getString(R.string.ol_gap_video_title), 16, TEXT, true));
+            q.addView(text(getString(R.string.ol_gap_video_note), 13, MUTED, false));
+            String g = GapService.videoMode(this);
+            q.addView(button(getString(R.string.ol_gap_video_1080), OvertakeLinkService.VIDEO_DIRECT.equals(g), v -> setGapVideo(OvertakeLinkService.VIDEO_DIRECT)));
+            q.addView(button(getString(R.string.ol_gap_video_720), OvertakeLinkService.VIDEO_DIRECT_LIGHT.equals(g), v -> setGapVideo(OvertakeLinkService.VIDEO_DIRECT_LIGHT)));
+            q.addView(button(getString(R.string.ol_gap_video_480), OvertakeLinkService.VIDEO_DIRECT_SMALL.equals(g), v -> setGapVideo(OvertakeLinkService.VIDEO_DIRECT_SMALL)));
+            q.addView(text(getString(R.string.ol_gap_video_hint), 12, MUTED, false));
+            content.addView(q, cardLp());
+            // Микрофон машины — только по кабелю; при выводе в GAP Smart Tool микрофон ГУ слушает его голосовое управление.
+            // Включили до обновления, когда GAP уже был выбран: выключаем и здесь, а не только при выборе вывода.
+            carMicOffForGap();
+            return;
+        }
         LinearLayout video = card();
         video.addView(text(getString(R.string.ol_video_title), 16, TEXT, true));
         String mode = getSharedPreferences("overtakelink", MODE_PRIVATE).getString(OvertakeLinkService.PREF_VIDEO_MODE, OvertakeLinkService.VIDEO_DEFAULT);
@@ -614,12 +652,6 @@ public final class OvertakeLinkActivity extends Activity {
         video.addView(text(getString(R.string.ol_video_hint), 12, MUTED, false));
         content.addView(video, cardLp());
 
-        // Микрофон машины — только по кабелю; при выводе в GAP Smart Tool микрофон ГУ слушает его голосовое управление.
-        if (gap) {
-            // Включили до обновления, когда GAP уже был выбран: выключаем и здесь, а не только при выборе вывода.
-            carMicOffForGap();
-            return;
-        }
         LinearLayout lab = card();
         lab.addView(text(getString(R.string.ol_experiments), 16, TEXT, true));
         lab.addView(text(getString(R.string.ol_car_mic_note), 13, MUTED, false));
@@ -656,6 +688,12 @@ public final class OvertakeLinkActivity extends Activity {
             getSharedPreferences("overtakelink", MODE_PRIVATE).edit().putBoolean(OvertakeLinkService.PREF_CAR_MIC, false).apply();
             EventLog.add("Микрофон машины (тест): выключен — выбран вывод в GAP Smart Tool");
         }
+    }
+
+    private void setGapVideo(String mode) {
+        getSharedPreferences("overtakelink", MODE_PRIVATE).edit().putString(GapService.PREF_GAP_VIDEO, mode).apply();
+        EventLog.add("Качество в GAP Smart Tool: " + mode);
+        render();
     }
 
     private void setVideoMode(String mode) {

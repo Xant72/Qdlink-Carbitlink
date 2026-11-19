@@ -23,6 +23,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import io.github.queryparams.overtakelink.link.EventLog
 import java.io.ByteArrayOutputStream
+import kotlin.math.roundToInt
 
 /**
  * Прямой режим: H.264 от Android Auto уходит на ГУ как есть — без декодирования, композиции и
@@ -76,27 +77,37 @@ object DirectProjection {
 
     /**
      * fitScreen — экран показывает кадр без растяжения (GAP Smart Tool): AA рисует интерфейс в полосе пропорций экрана,
-     * остальное — поля (CONTAIN). Без него — весь кадр, ГУ растягивает (QDLink).
+     * остальное — поля (CONTAIN). Без него — весь кадр, ГУ растягивает (QDLink). fit — во сколько раз полоса меньше
+     * места в GAP ({@link #fit}).
      */
     @JvmStatic
-    fun prepareSettings(settings: Settings, size: Size, fitScreen: Boolean) {
+    fun prepareSettings(settings: Settings, size: Size, fitScreen: Boolean, fit: Float = 1f) {
         settings.resolutionId = size.resolution.id
         settings.videoFitMode = if (fitScreen) Settings.VideoFitMode.CONTAIN else Settings.VideoFitMode.FILL
         // Один холст интерфейса (~853 dp в ширину) для всех размеров: автоматика OHU даёт 150 dpi на
         // 800 px ширины, но не выше 240 — в 1080p холст вырос бы до 1280 dp и интерфейс измельчал.
         settings.dpiPixelDensity = size.width * 150 / 800
-        // Полоса интерфейса в GAP Smart Tool низкая (1920×713 у 1080p): при 360 dpi в ней ~317 dp высоты — мелко и тесно
-        // для AA; 240 dpi — ~1280×475 dp, как у обычной широкой магнитолы.
-        if (fitScreen) settings.dpiPixelDensity = 240
+        // Полоса интерфейса в GAP Smart Tool низкая (1724×640 у 1080p): при 360 dpi в ней ~284 dp высоты — мелко и тесно
+        // для AA; 240 dpi — ~1150×427 dp, как у обычной широкой магнитолы. Полоса меньше (720p, 480p) — плотность меньше
+        // во столько же раз: интерфейс AA того же размера, только чётче или мягче.
+        if (fitScreen) settings.dpiPixelDensity = (240 * fit).roundToInt()
         settings.videoCodec = VideoDecoder.CodecType.H264.settingsValue
         settings.fpsLimit = 30
     }
 
     @JvmStatic
-    fun start(context: Context, width: Int, height: Int, size: Size, sink: Sink) = start(context, width, height, size, sink, false)
+    fun start(context: Context, width: Int, height: Int, size: Size, sink: Sink) = start(context, width, height, size, sink, false, 1f)
 
+    /**
+     * GAP: во сколько раз экран AA меньше места в GAP. Полоса экрана лежит в кадре 1:1 — у 1080p она целиком, а кадр
+     * уже места (720p, 480p) — экран той же формы, но меньше, иначе полей нет и GAP растянул бы кадр по ширине.
+     */
     @JvmStatic
-    fun start(context: Context, width: Int, height: Int, size: Size, sink: Sink, fitScreen: Boolean) {
+    fun fit(width: Int, height: Int, size: Size): Float = minOf(1f, size.width.toFloat() / width, size.height.toFloat() / height)
+
+    /** fit — из {@link #fit}: экран width×height уже уменьшен, плотность — во столько же раз (интерфейс AA того же размера). */
+    @JvmStatic
+    fun start(context: Context, width: Int, height: Int, size: Size, sink: Sink, fitScreen: Boolean, fit: Float) {
         val app = App.provide(context)
         this.context = context.applicationContext
         val gen: Int
@@ -118,7 +129,7 @@ object DirectProjection {
         closed = false
         wasProjecting = false
         noticeText = null
-        prepareSettings(app.settings, size, fitScreen)
+        prepareSettings(app.settings, size, fitScreen, fit)
         val car = CarScreen.windowContext(context) ?: context
         HeadUnitScreenConfig.init(car, car.resources.displayMetrics, app.settings)
         HeadUnitScreenConfig.updateSurfaceDimensions(width, height)

@@ -52,6 +52,10 @@ public final class GapService extends Service {
     public static final String ACTION_START = "io.github.queryparams.overtakelink.GAP_START";
     public static final String ACTION_STOP = "io.github.queryparams.overtakelink.GAP_STOP";
     public static final String PREF_OUTPUT = "output";
+    /** Качество картинки в GAP: прямой 1080p / 720p / 480p (значения — как у кабельного режима видео). */
+    public static final String PREF_GAP_VIDEO = "gapVideo";
+    /** Место для AA, которое GAP прислал при последнем подключении («1724×640»). */
+    public static final String PREF_GAP_SCREEN = "gapScreen";
     public static final String OUTPUT_USB = "usb";
     public static final String OUTPUT_GAP = "gap";
 
@@ -82,6 +86,10 @@ public final class GapService extends Service {
     /** «Стоп» нажат руками — сама служба при открытии приложения не поднимается, до «Включить». */
     public static boolean stoppedByUser(Context c) {
         return c.getSharedPreferences("overtakelink", MODE_PRIVATE).getBoolean("gapStopped", false);
+    }
+
+    public static String videoMode(Context c) {
+        return c.getSharedPreferences("overtakelink", MODE_PRIVATE).getString(PREF_GAP_VIDEO, OvertakeLinkService.VIDEO_DIRECT);
     }
 
     public static boolean selected(Context c) {
@@ -329,7 +337,9 @@ public final class GapService extends Service {
         private volatile boolean open = true;
         private volatile boolean waitKey = true;
         private volatile long lastIn = System.currentTimeMillis();
+        /** Что ушло в GAP последним; проверка и отправка — под {@link #geometryLock}: тик и поток видео. */
         private int[] sentGeometry;
+        private final Object geometryLock = new Object();
         private String sentStatus;
         private boolean keyAsked;
 
@@ -351,6 +361,21 @@ public final class GapService extends Service {
             }
         }
 
+        /** Геометрия кадра AA — в GAP, если изменилась с прошлой отправки. */
+        private int[] sendGeometry() {
+            // Чтение, проверка и отправка — одним шагом: иначе тик отправил бы прочитанную раньше (устаревшую) после
+            // свежей или запомнил бы новую, не успев отправить, — и поток видео пустил бы SPS первым.
+            synchronized (geometryLock) {
+                int[] g = DirectProjection.geometry();
+                if (!Arrays.equals(g, sentGeometry)) {
+                    sentGeometry = g;
+                    EventLog.add("GAP Smart Tool: кадр AA " + g[0] + "x" + g[1] + ", поля " + g[2] + "x" + g[3]);
+                    send(GapProtocol.GEOMETRY, GapProtocol.u16s(g));
+                }
+                return g;
+            }
+        }
+
         void video(byte[] data, int off, int len, boolean key) {
             if (!open) {
                 return;
@@ -369,6 +394,11 @@ public final class GapService extends Service {
             }
             if (key) {
                 waitKey = false;
+            }
+            // Декодер GAP настраивается по геометрии на первом SPS: она — раньше SPS, уже после выбора размера AA
+            // (прежняя у GAP — от другого качества, а AA мог выбрать запасной размер).
+            if (config) {
+                sendGeometry();
             }
             byte[] p = new byte[len + 1];
             p[0] = (byte) ((config ? GapProtocol.VIDEO_CONFIG : 0) | (key ? GapProtocol.VIDEO_KEY : 0));
@@ -466,12 +496,7 @@ public final class GapService extends Service {
                     keyAsked = true;
                     DirectProjection.requestKeyFrame();
                 }
-                int[] g = DirectProjection.geometry();
-                if (!Arrays.equals(g, sentGeometry)) {
-                    sentGeometry = g;
-                    EventLog.add("GAP Smart Tool: кадр AA " + g[0] + "x" + g[1] + ", поля " + g[2] + "x" + g[3]);
-                    send(GapProtocol.GEOMETRY, GapProtocol.u16s(g));
-                }
+                int[] g = sendGeometry();
                 status("");
                 if (state != OvertakeLinkService.State.RUNNING) {
                     setState(OvertakeLinkService.State.RUNNING, getString(R.string.ol_gap_running_detail, g[0] - g[2], g[1] - g[3]));
@@ -514,7 +539,12 @@ public final class GapService extends Service {
                     return;
                 }
                 stopScreen();
-                CarScreen sc = new CarScreen(w, h, 160, new CarScreen.Sink() {
+                getSharedPreferences("overtakelink", MODE_PRIVATE).edit().putString(PREF_GAP_SCREEN, w + "×" + h).apply();
+                DirectProjection.Size size = OvertakeLinkService.directSize(videoMode(GapService.this));
+                float fit = DirectProjection.fit(w, h, size);
+                int sw = Math.round(w * fit);
+                int sh = Math.round(h * fit);
+                CarScreen sc = new CarScreen(sw, sh, 160, new CarScreen.Sink() {
                     @Override
                     public void onCodecConfig(byte[] spsPps) {
                     }
@@ -532,7 +562,7 @@ public final class GapService extends Service {
                 screen = sc;
                 clientConnected = true;
                 wakeLock.acquire();
-                DirectProjection.start(GapService.this, w, h, DirectProjection.Size.FULL, this::video, true);
+                DirectProjection.start(GapService.this, sw, sh, size, this::video, true, fit);
                 hello = true;
                 keyAsked = false;
                 // AA ещё работает с прошлого подключения (Wi-Fi переподключился быстрее закрытия старого клиента):

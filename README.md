@@ -98,7 +98,9 @@ from the file (more in [Privacy](PRIVACY.md)).
 - If the picture now and then drops to a black screen or tears, lower the quality (1080p → 720p → 480p): the head
   unit may not keep up with drawing heavy frames. Quality is set with “Video to the car screen” and only
   for the cable connection: the new one takes effect once you unplug the cable and plug it back in. With output to
-  GAP Smart Tool over Wi-Fi the quality is always 1080p and this setting does not affect it.
+  GAP Smart Tool over Wi-Fi quality has its own setting, “Picture quality in GAP Smart Tool”: 1080p (as on the screen,
+  the default), 720p or 480p; the new one takes effect the next time GAP Smart Tool connects, right away after “Stop” →
+  “Turn on”.
 
 **Tested:** Xiaomi 14 Ultra (Android 15, HyperOS) + Geely Atlas Pro 2023; Android 11 and 15 emulators with a
 head unit simulator. Other combinations — please report how it went.
@@ -151,10 +153,10 @@ Video modes:
 Instead of QDLink, the picture can go to [GAP Smart Tool](https://github.com/queryParams/gap-smart-tool) on the head
 unit (Settings → “Where to show Android Auto” → “In GAP Smart Tool over Wi-Fi”; chosen by hand, the cable is then only
 for charging). The phone shares its hotspot, the head unit joins it, and GAP Smart Tool connects to its network gateway —
-the phone — on TCP port 47621. OvertakeLink starts Android Auto in direct 1080p mode for the screen area GAP Smart Tool
-reports (1724×640 on the Atlas Pro): AA draws its interface in that shape with margins around it, H.264 goes over as is,
-touches come back. The “Video to the car screen” setting does not apply here. After a phone restart, open OvertakeLink
-once; after “Stop”, tap “Turn on”.
+the phone — on TCP port 47621. OvertakeLink starts Android Auto in direct mode (1080p, 720p or 480p from “Picture
+quality in GAP Smart Tool”) for the screen area GAP Smart Tool reports (1724×640 on the Atlas Pro): AA draws its
+interface in that shape with margins around it, H.264 goes over as is, touches come back. After a phone restart, open
+OvertakeLink once; after “Stop”, tap “Turn on”.
 Protocol: `gap/GapProtocol.java` (a copy lives in GAP Smart Tool).
 
 ## Building

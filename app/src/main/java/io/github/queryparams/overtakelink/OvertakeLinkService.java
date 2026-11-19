@@ -713,6 +713,12 @@ public final class OvertakeLinkService extends Service implements LinkSession.Ho
         return getSharedPreferences("overtakelink", MODE_PRIVATE).getString(PREF_VIDEO_MODE, VIDEO_DEFAULT);
     }
 
+    /** Размер кадра прямого режима по выбору видео (прямой 1080p / 720p / 480p). */
+    public static DirectProjection.Size directSize(String mode) {
+        return VIDEO_DIRECT_LIGHT.equals(mode) ? DirectProjection.Size.LIGHT
+                : VIDEO_DIRECT_SMALL.equals(mode) ? DirectProjection.Size.SMALL : DirectProjection.Size.FULL;
+    }
+
     /**
      * ГУ сообщило размер экрана (через ~12 мс после подключения): сразу поднимаем экран машины
      * и Android Auto, не дожидаясь команды play: AA успевает загрузиться, пока ГУ договаривается.
@@ -747,8 +753,7 @@ public final class OvertakeLinkService extends Service implements LinkSession.Ho
         String mode = videoMode();
         // Режим — локально: в поля direct/directSize — только вместе с публикацией экрана, после проверки сеанса.
         boolean isDirect = !VIDEO_TRANSCODE.equals(mode);
-        DirectProjection.Size size = VIDEO_DIRECT_LIGHT.equals(mode) ? DirectProjection.Size.LIGHT
-                : VIDEO_DIRECT_SMALL.equals(mode) ? DirectProjection.Size.SMALL : DirectProjection.Size.FULL;
+        DirectProjection.Size size = directSize(mode);
         CarScreen screen = new CarScreen(carWidth, carHeight, CAR_DPI, new CarScreen.Sink() {
             @Override
             public void onEncoderFailed(String why) {

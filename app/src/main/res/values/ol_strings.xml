@@ -2,6 +2,8 @@
 <!-- OvertakeLink: строки своего интерфейса; русские — в values-ru/ol_strings.xml. -->
 <resources>
     <string name="ol_car_never">car not connected yet</string>
+    <string name="ol_gap_screen">screen in GAP %1$s</string>
+    <string name="ol_gap_never">GAP Smart Tool not connected yet</string>
     <string name="ol_car_screen">car screen %1$s</string>
     <string name="ol_tab_status">Status</string>
     <string name="ol_tab_settings">Settings</string>
@@ -86,7 +88,13 @@
     <string name="ol_video_direct_light">Direct 720p</string>
     <string name="ol_video_direct_small">Direct 480p (lower resolution)</string>
     <string name="ol_video_transcode">Compatible (more reliable)</string>
-    <string name="ol_video_hint">If the car screen stays black in direct mode, try 720p, then 480p; if that doesn’t help, choose compatible. Applies the next time you plug in the cable. Cable (QDLink) only: in GAP Smart Tool the picture is always direct 1080p.</string>
+    <string name="ol_video_hint">If the car screen stays black in direct mode, try 720p, then 480p; if that doesn’t help, choose compatible. Applies the next time you plug in the cable.</string>
+    <string name="ol_gap_video_title">Picture quality in GAP Smart Tool</string>
+    <string name="ol_gap_video_note">Lower quality means less load on the head unit, phone and Wi-Fi; the Android Auto interface keeps its size, only softer.</string>
+    <string name="ol_gap_video_1080">1080p — as on the screen</string>
+    <string name="ol_gap_video_720">720p — softer, lighter for the head unit</string>
+    <string name="ol_gap_video_480">480p — fallback</string>
+    <string name="ol_gap_video_hint">If the Android Auto screen flickers or tears, try 720p, then 480p. Applies the next time GAP Smart Tool connects; right away — “Stop” → “Turn on”.</string>
 
     <string name="ol_save_log">Save log</string>
     <string name="ol_saved">Saved: %1$s</string>
