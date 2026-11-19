@@ -117,11 +117,21 @@ object DirectProjection {
             this.sink = sink
             sps = null
             pps = null
-            needKey = true
+            synchronized(waitLock) {
+                needKey = true
+                waitChanges++
+            }
             framesFromAa = 0
             framesAtTransport = 0
             generation++
             gen = generation
+        }
+        // Новый показ: первый запрос ключевого кадра — сразу, пауза прошлого показа не в счёт. Под keyLock:
+        // запоздавший запрос прошлого показа не перезапишет сброс.
+        synchronized(keyLock) {
+            lastCycleAt = 0L
+            // Пауза между циклами — только для GAP Smart Tool; кабель (QDLink) — как раньше, сразу.
+            limitCycles = fitScreen
         }
         carWidth = width
         carHeight = height
@@ -150,6 +160,8 @@ object DirectProjection {
         scope = null
         main.removeCallbacks(firstFrameWatchdog)
         main.removeCallbacks(splashCheck)
+        // Отложенный запрос ключевого кадра — прошлого показа: новому он не нужен.
+        main.removeCallbacks(keyLater)
         pendingSplash.set(null)
         sink = null
         context = null
@@ -193,25 +205,84 @@ object DirectProjection {
 
     /** ГУ начало показ или просит ключевой кадр: SPS/PPS + IDR от AA (или заставка, если AA нет). */
     @JvmStatic
-    fun requestKeyFrame() {
-        needKey = true
+    fun requestKeyFrame() = requestKey(false)
+
+    /**
+     * retry — отложенный повтор: ключевой кадр за паузу уже пришёл — видео не перезапускаем. Зовут поток чтения GAP, его
+     * тик и главный: проверка паузы и её отметка — под keyLock, а сам цикл (он пишет журнал) — уже без замка.
+     */
+    private fun requestKey(retry: Boolean) {
+        // Пересылку кадров (needKey) останавливаем только с самим циклом: отложенный запрос не должен замораживать
+        // исправную картинку на всю паузу.
+        if (!retry) keyWanted = true
         val ctx = context ?: return
         val comm = App.provide(ctx).commManager
         if (comm.connectionState.value is CommManager.ConnectionState.TransportStarted) {
+            // Каждый цикл фокуса AA видит как пропажу экрана и пересобирает его (карточки исчезают и проявляются):
+            // не чаще раза в KEY_CYCLE_MS. Запросы в паузе — один отложенный, если ключевой кадр так и не пришёл.
+            val mine: Long
+            synchronized(keyLock) {
+                // Отложенный повтор — только в показе GAP: сменили вывод на кабель — ему он не нужен.
+                if (retry && (!keyWanted || !limitCycles)) return
+                val now = android.os.SystemClock.elapsedRealtime()
+                val wait = if (limitCycles) lastCycleAt + KEY_CYCLE_MS - now else 0L
+                if (wait > 0) {
+                    main.removeCallbacks(keyLater)
+                    main.postDelayed(keyLater, wait)
+                    return
+                }
+                lastCycleAt = now
+                mine = now
+            }
+            // Ждём ключевой кадр — до сброса фокуса: запоздавший поток не включит ожидание уже после первого IDR нового
+            // потока. Цикл не начался — ожидание снимаем, иначе картинка встала бы без нового IDR.
+            val wasWaiting: Boolean
+            val changesBefore: Long
+            synchronized(waitLock) {
+                wasWaiting = needKey
+                changesBefore = waitChanges
+                needKey = true
+            }
             // Повторный запрос уже выданного фокуса AA игнорирует: как OHU, отпускаем и забираем фокус.
             val cycle = comm.releaseVideoFocusForKeyframe()
             if (cycle != null) {
                 main.postDelayed({ comm.retakeVideoFocusForKeyframe(cycle) }, WarmRelaunchKeyframePolicy.FOCUS_CYCLE_GAP_MS)
+            } else {
+                // Цикл не состоялся — паузу не держим (следующий запрос пусть проходит сразу), ожидание — как было до запроса.
+                // …если только за это время ожидание не трогали: прошёл IDR, заставка ждёт IDR после себя или отброшен кадр.
+                synchronized(waitLock) { if (waitChanges == changesBefore) needKey = wasWaiting }
+                synchronized(keyLock) { if (lastCycleAt == mine) lastCycleAt = 0L }
             }
             // AA не ответил кадром за секунду (ещё грузится) — пусть на экране будет заставка. Проверка одна на все
             // запросы: повторные лишь перезаводят её, очередь главного потока не растёт.
             splashCheckAsked = framesFromAa
             main.removeCallbacks(splashCheck)
             main.postDelayed(splashCheck, 1500)
-        } else {
+        } else if (!retry) {
+            synchronized(waitLock) {
+                needKey = true
+                waitChanges++
+            }
             showSplash(noticeText ?: text(if (closed) R.string.ol_car_closed else R.string.ol_car_starting))
         }
     }
+
+    /** Цикл фокуса ради ключевого кадра — не чаще (мс). */
+    private const val KEY_CYCLE_MS = 4000L
+    private val keyLock = Any()
+    private var lastCycleAt = 0L
+    /** Показ в GAP Smart Tool (fitScreen): там пауза между циклами; по кабелю QDLink поведение прежнее. */
+    private var limitCycles = false
+    private val keyLater = Runnable { requestKey(true) }
+    /**
+     * Ожидание IDR (needKey) и счётчик его изменений — IDR, заставка, новый показ, отброшенный кадр — под waitLock (берут и
+     * внутри sendLock, не наоборот): откат в requestKey их не перезапишет и не ждёт отправки кадра.
+     */
+    private val waitLock = Any()
+    private var waitChanges = 0L
+
+    /** ГУ просило ключевой кадр, а он ещё не пришёл (отложенный повтор смотрит на это, а не на needKey). */
+    @Volatile private var keyWanted = false
 
     @Volatile private var splashCheckAsked = 0L
     private val splashCheck = Runnable {
@@ -254,7 +325,10 @@ object DirectProjection {
                     if (framesFromAa != req.aaAtRequest || generation != req.gen) return@execute
                     send(frame)
                     // Следующие кадры AA ссылались бы на свой опорный кадр, а на экране — заставка: ждём IDR от AA.
-                    needKey = true
+                    synchronized(waitLock) {
+                        needKey = true
+                        waitChanges++
+                    }
                 }
             } catch (e: Exception) {
                 EventLog.error("заставка экрана машины", e)
@@ -343,8 +417,18 @@ object DirectProjection {
             if (gen != generation) return
             val f = frame(buf, off, len, true) ?: return
             framesFromAa++
-            if (needKey && !f.key) return
-            if (f.key) needKey = false
+            synchronized(waitLock) {
+                // Отброшенный кадр тоже считается: без него цепочка P-кадров уже не полна, откат ожидания недопустим.
+                if (needKey && !f.key) {
+                    waitChanges++
+                    return
+                }
+                if (f.key) {
+                    needKey = false
+                    keyWanted = false
+                    waitChanges++
+                }
+            }
             send(f)
         }
     }

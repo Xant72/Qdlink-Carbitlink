@@ -431,7 +431,8 @@ public final class GapService extends Service {
                                     p.u16(1), p.u16(3));
                             break;
                         case GapProtocol.KEYFRAME:
-                            waitKey = true;
+                            // Обычные кадры не останавливаем: пока ждёт ключевой, GAP отбрасывает их сам, а запоздавший
+                            // запрос (GAP уже восстановился) иначе заморозил бы исправную картинку до следующего IDR.
                             DirectProjection.requestKeyFrame();
                             break;
                         default:
