@@ -105,7 +105,7 @@ public final class OvertakeLinkActivity extends Activity {
         head.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         LinearLayout buttons = row();
         head.addView(buttons);
-        // «Поддержать» — только в русском интерфейсе: перевод по СБП работает с российскими картами.
+        // «Поддержать» — только в русском интерфейсе: перевод на карту Сбербанка — с российских карт.
         if (donateAvailable()) {
             // Заметно, но не кричит: розовая рамка и лёгкая заливка, как кнопка «Условия» рядом.
             TextView heart = text("\u2665\uFE0E " + getString(R.string.ol_donate), 13, DONATE, true);
@@ -364,6 +364,9 @@ public final class OvertakeLinkActivity extends Activity {
         boolean mic = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
         boolean battery = getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(getPackageName());
         boolean usbDefault = getSharedPreferences("overtakelink", MODE_PRIVATE).getBoolean("usbSeen", false);
+        // Вывод в GAP идёт по Wi-Fi телефона: вместо проверки кабеля — на связи ли GAP Smart Tool (ГУ в сети
+        // телефона). Включена ли раздача, на новых Android приложению не узнать — проверяем то, что нужно.
+        boolean gap = GapService.selected(this);
         boolean bt = false;
         for (AudioDeviceInfo d : getSystemService(AudioManager.class).getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
             if (d.getType() == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP) bt = true;
@@ -374,7 +377,9 @@ public final class OvertakeLinkActivity extends Activity {
                 new Check(getString(R.string.ol_check_battery), battery, getString(R.string.ol_yes), getString(R.string.ol_check_battery_bad)),
                 new Check(getString(R.string.ol_check_aa_server), aaServerUp,
                         getString(R.string.ol_check_aa_server_ok), getString(R.string.ol_check_aa_server_bad)),
-                new Check(getString(R.string.ol_check_usb), usbDefault, getString(R.string.ol_yes), getString(R.string.ol_check_usb_bad)),
+                gap ? new Check(getString(R.string.ol_check_hotspot), GapService.clientConnected(),
+                        getString(R.string.ol_check_hotspot_ok), getString(R.string.ol_check_hotspot_bad))
+                        : new Check(getString(R.string.ol_check_usb), usbDefault, getString(R.string.ol_yes), getString(R.string.ol_check_usb_bad)),
                 new Check(getString(R.string.ol_check_bt), bt, getString(R.string.ol_check_bt_ok), getString(R.string.ol_check_bt_bad))
         };
     }
@@ -464,6 +469,10 @@ public final class OvertakeLinkActivity extends Activity {
                 {R.string.ol_setup_3_title, R.string.ol_setup_3_text, R.string.ol_setup_3_action},
                 {R.string.ol_setup_4_title, R.string.ol_setup_4_text, R.string.ol_setup_4_action}
         };
+        // В режиме GAP шаг про кабель — про точку доступа.
+        if (GapService.selected(this)) {
+            steps[3] = new int[]{R.string.ol_setup_3_gap_title, R.string.ol_setup_3_gap_text, R.string.ol_setup_3_gap_action};
+        }
         int[] s = steps[setupStep];
         content.addView(text(getString(R.string.ol_setup_progress, setupStep + 1, steps.length), 12, MUTED, false));
         LinearLayout bars = row();
@@ -479,8 +488,8 @@ public final class OvertakeLinkActivity extends Activity {
         TextView body = text(getString(s[1]), 15, 0xFFC3C9D1, false);
         body.setPadding(0, dp(12), 0, dp(16));
         content.addView(body);
-        // Шаг → проверка готовности: разрешения, батарея, сервер AA, (кабель — без проверки), Bluetooth.
-        int[] checkOf = {0, 1, 2, -1, 4};
+        // Шаг → проверка готовности: разрешения, батарея, сервер AA, (кабель — без проверки; точка доступа в GAP — с ней), Bluetooth.
+        int[] checkOf = {0, 1, 2, GapService.selected(this) ? 3 : -1, 4};
         if (checkOf[setupStep] >= 0) {
             content.addView(checkRow(checks()[checkOf[setupStep]]));
         }
@@ -528,7 +537,17 @@ public final class OvertakeLinkActivity extends Activity {
                     openAndroidAuto();
                     break;
                 case 3:
-                    nextSetupStep();
+                    if (!GapService.selected(this)) {
+                        nextSetupStep();
+                        break;
+                    }
+                    // Настройки раздачи — всегда: и включить, и посмотреть пароль сети для ГУ. Действие экрана раздачи
+                    // не публичное, но есть у большинства прошивок; нет — общий раздел «Сеть».
+                    try {
+                        startActivity(new Intent("android.settings.TETHER_SETTINGS"));
+                    } catch (Exception e) {
+                        startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS));
+                    }
                     break;
                 default:
                     startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS));

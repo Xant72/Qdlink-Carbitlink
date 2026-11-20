@@ -45,6 +45,9 @@
     <string name="ol_check_aa_server_bad">turn on</string>
     <string name="ol_check_usb">OvertakeLink has opened on cable</string>
     <string name="ol_check_usb_bad">checked in the car</string>
+    <string name="ol_check_hotspot">GAP Smart Tool connected</string>
+    <string name="ol_check_hotspot_ok">yes</string>
+    <string name="ol_check_hotspot_bad">checked in the car</string>
     <string name="ol_check_bt">Bluetooth audio (any device)</string>
     <string name="ol_check_bt_ok">connected</string>
     <string name="ol_check_bt_bad">not connected</string>
@@ -70,6 +73,9 @@
     <string name="ol_setup_3_title">Cable and default app</string>
     <string name="ol_setup_3_text">Connect the phone to the car’s USB port with a cable.\nAndroid will ask which app should open “QDriveLink” (on some cars “AndroidLink”) — choose OvertakeLink and tick “Always”.\nThe first time, Android Auto will ask you on the phone to accept its terms and allow notification access — do it while parked.\nIt’s best to uninstall the stock QDLink app.</string>
     <string name="ol_setup_3_action">Got it</string>
+    <string name="ol_setup_3_gap_title">Hotspot</string>
+    <string name="ol_setup_3_gap_text">Turn on the hotspot (Wi-Fi tethering) on the phone and connect the head unit to it: GAP Smart Tool → Settings → Wi-Fi → the phone’s network. GAP Smart Tool finds the phone on that network by itself.\nMobile data isn’t needed — tethering can work without it.</string>
+    <string name="ol_setup_3_gap_action">Open tethering</string>
     <string name="ol_setup_4_title">Bluetooth: audio and steering wheel buttons</string>
     <string name="ol_setup_4_text">Android Auto sound goes to the car over Bluetooth, just like your music does now. Make sure the phone is connected to the car.\nSteering wheel “next / previous” switch tracks while the head unit’s Bluetooth player is open. The voice button on the steering wheel works only if the car passes it to the phone over Bluetooth; if not, call the Assistant with “Hey Google” or the microphone icon on the car screen.</string>
     <string name="ol_setup_4_action">Open Bluetooth</string>
@@ -132,12 +138,12 @@
     <string name="ol_donate">Support</string>
     <string name="ol_donate_title">Support OvertakeLink</string>
     <string name="ol_donate_text">The app is free and will stay free. If it helps you, you can support the author with any amount. It is voluntary and changes nothing in the app.</string>
-    <string name="ol_donate_sbp">Transfer via SBP</string>
-    <string name="ol_donate_sbp_note">A bank selection page will open</string>
+    <string name="ol_donate_sbp">Transfer to card</string>
+    <string name="ol_donate_sbp_note">A page with the Sberbank card number will open</string>
     <string name="ol_donate_thanks">Thank you!</string>
     <string name="ol_donate_open_failed">Couldn’t open the link: %1$s</string>
-    <!-- «Поддержать»: перевод по СБП (та же ссылка, что в GAP Smart Tool); вход — только в русском интерфейсе. -->
-    <string name="ol_donate_url" translatable="false">https://www.sberbank.ru/ru/choise_bank?requisiteNumber=79586230781&amp;bankCode=100000000111</string>
+    <!-- «Поддержать»: страница с картой Сбербанка (та же, что в GAP Smart Tool); вход — только в русском интерфейсе. -->
+    <string name="ol_donate_url" translatable="false">https://queryparams.github.io/gap-smart-tool/donate.html</string>
     <string name="ol_output_title">Where to show Android Auto</string>
     <string name="ol_output_usb">By cable (QDLink)</string>
     <string name="ol_output_usb_note">As before: the head unit’s own QDLink</string>
