@@ -240,4 +240,4 @@ final class AdbMultiplexer implements Closeable {
         }
         synchronized (this.lock) {
             if (!this.connected) {
-
+        }
