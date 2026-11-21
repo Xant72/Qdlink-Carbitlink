@@ -260,4 +260,4 @@ public final class CarbitSession implements Closeable {
 
     private void requestKeyFrameLocked() {
         if (this.recoveryPending) return;
-
+       }
