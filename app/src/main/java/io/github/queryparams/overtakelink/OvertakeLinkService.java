@@ -353,7 +353,6 @@ IntentFilter f = new IntentFilter(UsbManager.ACTION_USB_ACCESSORY_DETACHED);
 f.addAction(Intent.ACTION_POWER_DISCONNECTED);
 registerReceiver(detachReceiver, f, Context.RECEIVER_NOT_EXPORTED);
 }
-```java
     private void openCarbit(Closeable l, InputStream i, OutputStream o) {
         wakeLock.acquire();
         link = l;
