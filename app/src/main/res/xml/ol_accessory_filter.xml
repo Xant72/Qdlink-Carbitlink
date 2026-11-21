@@ -1,1 +1,3 @@
-ol_accessory_filter.xml
+<resources>
+    <usb-accessory />
+</resources>
