@@ -56,10 +56,6 @@ import io.github.queryparams.overtakelink.link.OldPackets;
 import io.github.queryparams.overtakelink.link.Packets;
 import io.github.queryparams.overtakelink.link.ScreenGeometry;
 
-/**
- * Сердце OvertakeLink: держит связь с ГУ по USB Accessory (протоколы QDLink и CarbitLink), поднимает экран машины
- * (виртуальный дисплей → H.264 → ГУ) и запускает на нём Android Auto через Open Headunit.
- */
 public final class OvertakeLinkService extends Service implements LinkSession.Host {
     public static final String ACTION_CONNECT_USB = "io.github.queryparams.overtakelink.CONNECT_USB";
     public static final String ACTION_STOP = "io.github.queryparams.overtakelink.STOP";
@@ -237,3 +233,6 @@ public final class OvertakeLinkService extends Service implements LinkSession.Ho
             types |= ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE;
         }
         try {
+            startForeground(NOTIFICATION_ID, buildNotification(), types);
+        } catch (RuntimeException e) {
+            EventLog.add("Микрофон для Ассистента недоступен: " + e.getMessage());
