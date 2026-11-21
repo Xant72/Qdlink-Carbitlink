@@ -22,6 +22,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 final class AdbMultiplexer implements Closeable {
     static final int MAX_PENDING_BYTES = 6291456;
+    private static final long ACK_TIMEOUT_NS = TimeUnit.SECONDS.toNanos(5);
+
     private boolean connected;
     private final InputStream input;
     private final Listener listener;
@@ -47,6 +49,16 @@ final class AdbMultiplexer implements Closeable {
         default void diagnostic(String str) {}
         void opened(Stream stream) throws IOException;
         default void peerIdentity(String str) {}
+    }
+
+    private static final class Chunk {
+        final byte[] bytes;
+        final Runnable completion;
+
+        Chunk(byte[] bytes, Runnable completion) {
+            this.bytes = bytes;
+            this.completion = completion;
+        }
     }
 
     AdbMultiplexer(InputStream inputStream, OutputStream outputStream, Listener listener) {
@@ -206,38 +218,44 @@ final class AdbMultiplexer implements Closeable {
     void checkTimeout(long nowNano) throws IOException {
         synchronized (this.lock) {
             for (Stream stream : this.streams.values()) {
-                if (stream.awaitingAck && nowNano - stream.outstandingAt > TimeUnit.SECONDS.toNanos(10L)) {
-                    throw new IOException("Carbit ADB stream acknowledgement timed out");
+                if (stream.awaitingAck && (nowNano - stream.outstandingAt) > ACK_TIMEOUT_NS) {
+                    throw new IOException("Carbit ADB write acknowledgement timed out on port " + stream.port);
                 }
             }
         }
     }
 
     private void receive(AdbPacket pkt) throws IOException {
-        Stream stream;
-        Runnable completion;
-        if (pkt.command == AdbPacket.CNXN) {
-            synchronized (this.lock) {
-                if (this.connected) {
-                    throw new IOException("Repeated ADB connection in active USB session");
-                }
-                if (pkt.arg1 < 1024 || pkt.arg1 > 1048576 || (pkt.arg1 != 4096 && pkt.arg0 != AdbPacket.VERSION && pkt.arg0 != 16777217)) {
-                    throw new IOException("Unsupported Carbit ADB version or payload size");
-                }
-                this.newAdbMode = pkt.arg1 != 4096;
-                this.peerMax = Math.min(pkt.arg1, AdbPacket.MAX_PAYLOAD);
-                this.connected = true;
-                emit(new AdbPacket(AdbPacket.CNXN, AdbPacket.VERSION + (this.newAdbMode ? 1 : 0), this.peerMax,
-                        "device::ro.product.name=jadbd".getBytes(StandardCharsets.UTF_8)));
-            }
-            this.listener.diagnostic("Carbit ADB negotiated version=0x" + Integer.toHexString(pkt.arg0) + " peerMax=" + pkt.arg1 + " mode=" + (this.newAdbMode ? "NEW" : "OLD"));
-            this.listener.peerIdentity(nonce(pkt.payload));
-            this.listener.connected();
-            return;
+        switch (pkt.command) {
+            case AdbPacket.CNXN:
+                handleConnect(pkt);
+                break;
+            case AdbPacket.OPEN:
+                handleOpen(pkt);
+                break;
+            case AdbPacket.OKAY:
+                handleOkay(pkt);
+                break;
+            case AdbPacket.WRTE:
+                handleWrite(pkt);
+                break;
+            case AdbPacket.CLSE:
+                handleClose(pkt);
+                break;
+            default:
+                this.listener.diagnostic("Carbit ADB ignored cmd=0x" + Integer.toHexString(pkt.command));
+                break;
         }
-        if (pkt.command == AdbPacket.AUTH) {
-            throw new IOException("This head unit requires an unsupported ADB authentication mode");
-        }
+    }
+
+    private void handleConnect(AdbPacket pkt) throws IOException {
+        boolean notifyConnected = false;
+        String identity = decodeIdentity(pkt.payload);
         synchronized (this.lock) {
+            this.peerMax = pkt.arg1 > 0 ? pkt.arg1 : 4096;
+            this.newAdbMode = pkt.arg0 >= 0x01000001;
             if (!this.connected) {
+                this.connected = true;
+                notifyConnected = true;
+            }
         }
